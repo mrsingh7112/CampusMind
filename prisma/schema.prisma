@@ -1,0 +1,176 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String   @id @default(cuid())
+  name          String
+  email         String   @unique
+  password      String
+  role          String   @default("STUDENT")
+  approved      Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model FacultyMember {
+  id         String         @id @default(cuid())
+  name       String
+  email      String         @unique
+  department String
+  position   String
+  tokenId    String         @unique
+  password   String
+  status     String         @default("ACTIVE")
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  courses    FacultyCourse[]
+}
+
+model StudentMember {
+  id         String   @id @default(cuid())
+  name       String
+  email      String   @unique
+  department String
+  semester   Int
+  courseId   Int
+  tokenId    String   @unique
+  password   String
+  status     String   @default("ACTIVE")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  course     Course   @relation(fields: [courseId], references: [id])
+}
+
+model Course {
+  id           Int             @id @default(autoincrement())
+  name         String
+  code         String          @unique
+  departmentId Int
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  department   Department      @relation(fields: [departmentId], references: [id])
+  studentAdds  StudentAdd[]
+  students     StudentMember[]
+  subjects     Subject[]
+  facultyCourses FacultyCourse[]
+}
+
+model Subject {
+  id       Int    @id @default(autoincrement())
+  name     String
+  semester Int
+  courseId Int
+  course   Course @relation(fields: [courseId], references: [id])
+}
+
+model Notification {
+  id            String   @id @default(cuid())
+  title         String
+  message       String
+  read          Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  recipientId   String
+  recipientType String   // "USER" or "FACULTY"
+  status        String   @default("UNREAD")
+}
+
+model ActivityLog {
+  id        String   @id @default(cuid())
+  action    String
+  entity    String
+  details   String
+  createdAt DateTime @default(now())
+}
+
+model Department {
+  id      Int      @id @default(autoincrement())
+  name    String   @unique
+  courses Course[]
+}
+
+model PublicSignup {
+  id         String   @id @default(cuid())
+  name       String
+  email      String
+  password   String
+  role       UserRole
+  department String
+  position   String?
+  courseId   Int?
+  semester   Int?
+  tokenId    String   @unique
+  createdAt  DateTime @default(now())
+}
+
+model DashboardChartData {
+  id        String   @id @default(uuid())
+  type      String
+  data      Json
+  createdAt DateTime @default(now())
+}
+
+model FacultyAttendance {
+  id        String   @id @default(cuid())
+  facultyId String
+  date      DateTime
+  time      DateTime
+  createdAt DateTime @default(now())
+}
+
+model FacultyWebAuthnCredential {
+  id           String   @id @default(cuid())
+  facultyId    String
+  credentialId String   @unique
+  publicKey    String
+  createdAt    DateTime @default(now())
+}
+
+model FacultyAdd {
+  id         String   @id @default(cuid())
+  name       String
+  email      String   @unique
+  department String
+  position   String
+  tokenId    String   @unique
+  password   String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model StudentAdd {
+  id         String   @id @default(cuid())
+  name       String
+  email      String   @unique
+  department String
+  semester   Int
+  courseId   Int
+  tokenId    String   @unique
+  password   String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  course     Course   @relation(fields: [courseId], references: [id])
+}
+
+model FacultyCourse {
+  id        String   @id @default(cuid())
+  facultyId String
+  courseId  Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  faculty   FacultyMember @relation(fields: [facultyId], references: [id])
+  course    Course    @relation(fields: [courseId], references: [id])
+
+  @@unique([facultyId, courseId])
+}
+
+enum UserRole {
+  ADMIN
+  FACULTY
+  STUDENT
+}
