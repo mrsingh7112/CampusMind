@@ -6,7 +6,7 @@ import StudentStatsCard from '@/components/admin/StudentStatsCard'
 import DepartmentStatsCard from '@/components/admin/DepartmentStatsCard'
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { UserPlus, Megaphone } from 'lucide-react'
+import { UserPlus, Megaphone, Layers } from 'lucide-react'
 import { useSession } from 'next-auth/react'
 import useSWR, { mutate } from 'swr'
 import RecentActivityLogs from '@/components/admin/RecentActivityLogs'
@@ -28,6 +28,7 @@ export default function AdminDashboard() {
   })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [showAllDepartments, setShowAllDepartments] = useState(false);
 
   // SWR for live stats
   const { data: students = [], isLoading: loadingStudents } = useSWR('/api/admin/students', fetcher, { refreshInterval: 3000 })
@@ -217,17 +218,22 @@ export default function AdminDashboard() {
               {/* Departments */}
               <div className="bg-white rounded-xl shadow p-5 border border-purple-100">
                 <div className="flex justify-between items-center mb-2">
-                  <h3 className="text-lg font-bold text-purple-700 flex items-center gap-2"><Megaphone className="w-5 h-5" /> Departments</h3>
-                  <a href="/admin/departments/manage" className="text-sm text-indigo-600 hover:text-indigo-500">Manage departments</a>
+                  <h3 className="text-lg font-bold text-purple-700 flex items-center gap-2">
+                    <Megaphone className="w-5 h-5" /> Departments
+                  </h3>
+                  <a href="/admin/departments/manage" className="text-sm text-indigo-600 hover:text-indigo-500">
+                    Manage departments
+                  </a>
                 </div>
-                <ul className="space-y-1">
+                <ul className="space-y-1 max-h-56 overflow-y-auto transition-all">
                   {loadingDepartments ? (
                     <li className="animate-pulse text-gray-400">Loading...</li>
                   ) : departments && departments.length > 0 ? (
-                    departments.map((dept: any) => (
-                      <li key={dept.id} className="flex items-center justify-between py-2">
+                    (showAllDepartments ? departments : departments.slice(0, 4)).map((dept: any) => (
+                      <li key={dept.id} className="flex items-center justify-between py-2 hover:bg-purple-50 rounded-lg transition">
                         <div className="flex items-center gap-2">
-                          <span className="bg-gradient-to-r from-blue-100 to-purple-100 px-3 py-1 rounded-full shadow text-sm text-blue-700 font-medium">
+                          <span className="bg-gradient-to-r from-blue-100 to-purple-100 px-3 py-1 rounded-full shadow text-sm text-blue-700 font-medium flex items-center gap-1">
+                            <Layers className="w-4 h-4 text-purple-400" />
                             {dept.name}
                           </span>
                         </div>
@@ -244,6 +250,14 @@ export default function AdminDashboard() {
                     <li className="text-gray-400">No departments added yet. Add departments from the Manage Departments page.</li>
                   )}
                 </ul>
+                {departments && departments.length > 4 && (
+                  <button
+                    className="mt-2 text-xs text-purple-600 hover:underline focus:outline-none"
+                    onClick={() => setShowAllDepartments((prev) => !prev)}
+                  >
+                    {showAllDepartments ? "Show less" : `Show all (${departments.length})`}
+                  </button>
+                )}
               </div>
               {/* Quick Actions */}
               <div className="bg-white rounded-xl shadow p-5 border border-orange-100">

@@ -4,10 +4,11 @@ import useSWR from 'swr'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { UserPlus, BookOpen, Layers } from 'lucide-react'
+import { toast } from 'sonner'
 
 const fetcher = (url: string) => fetch(url).then(res => res.json())
 
-function generateToken() {
+function generateRollNumber() {
   return 'STU' + Math.floor(100000 + Math.random() * 900000)
 }
 function generatePassword() {
@@ -20,11 +21,9 @@ function generatePassword() {
 }
 
 export default function AddStudentPage() {
-  const [form, setForm] = useState({ name: '', email: '', courseId: '', semester: '', tokenId: '', password: '' })
+  const [form, setForm] = useState({ name: '', email: '', courseId: '', semester: '', rollNumber: '', password: '', phoneNumber: '' })
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
-  const [showCreds, setShowCreds] = useState<{token: string, password: string} | null>(null)
+  const [showCreds, setShowCreds] = useState<{rollNumber: string, password: string} | null>(null)
 
   // Fetch courses
   const { data: courses, isLoading: loadingCourses } = useSWR('/api/admin/courses', fetcher)
@@ -32,22 +31,25 @@ export default function AddStudentPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
-    setError('')
-    setSuccess('')
-    const token = generateToken()
+    setShowCreds(null)
+    const rollNumber = generateRollNumber()
     const password = generatePassword()
     try {
       const res = await fetch('/api/admin/students', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, courseId: Number(form.courseId), tokenId: token, password }),
+        body: JSON.stringify({ ...form, courseId: Number(form.courseId), rollNumber, password }),
       })
-      if (!res.ok) throw new Error('Failed to add student')
-      setShowCreds({ token, password })
-      setSuccess('Student added successfully!')
-      setForm({ name: '', email: '', courseId: '', semester: '', tokenId: '', password: '' })
-    } catch (err) {
-      setError('Failed to add student')
+      const data = await res.json()
+      if (!res.ok) {
+        toast.error(data.error || data.details || 'Failed to add student')
+        return
+      }
+      setShowCreds({ rollNumber, password })
+      toast.success('Student added successfully!')
+      setForm({ name: '', email: '', courseId: '', semester: '', rollNumber: '', password: '', phoneNumber: '' })
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to add student')
     } finally {
       setLoading(false)
     }
@@ -79,13 +81,12 @@ export default function AddStudentPage() {
           </div>
         </div>
         <Input placeholder="Semester" value={form.semester} onChange={e => setForm(f => ({ ...f, semester: e.target.value }))} required />
+        <Input placeholder="Phone Number (optional)" value={form.phoneNumber} onChange={e => setForm(f => ({ ...f, phoneNumber: e.target.value }))} />
         <Button type="submit" disabled={loading} className="w-full py-3 text-lg font-bold bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white shadow-lg rounded-lg">{loading ? 'Adding...' : 'Add Student'}</Button>
-        {error && <div className="text-red-500">{error}</div>}
-        {success && <div className="text-green-600">{success}</div>}
       </form>
       {showCreds && (
         <div className="mt-4 p-4 bg-blue-50 rounded">
-          <div><b>Student Token:</b> {showCreds.token}</div>
+          <div><b>Roll Number:</b> {showCreds.rollNumber}</div>
           <div><b>Password:</b> {showCreds.password}</div>
           <div className="text-xs text-gray-500 mt-2">Share these credentials with the student.</div>
         </div>

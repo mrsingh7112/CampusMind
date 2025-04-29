@@ -4,10 +4,11 @@ import useSWR, { mutate } from 'swr'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { UserPlus, Building2, Layers } from 'lucide-react'
+import { toast } from 'sonner'
 
 const fetcher = (url: string) => fetch(url).then(res => res.json())
 
-function generateToken() {
+function generateEmployeeId() {
   return 'FAC' + Math.floor(100000 + Math.random() * 900000)
 }
 function generatePassword() {
@@ -20,11 +21,9 @@ function generatePassword() {
 }
 
 export default function AddFacultyPage() {
-  const [form, setForm] = useState({ name: '', email: '', department: '', position: '', password: '' })
+  const [form, setForm] = useState({ name: '', email: '', department: '', position: '', password: '', phoneNumber: '' })
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
-  const [showCreds, setShowCreds] = useState<{token: string, password: string} | null>(null)
+  const [showCreds, setShowCreds] = useState<{employeeId: string, password: string} | null>(null)
 
   // Fetch departments
   const { data: departments, isLoading: loadingDepartments } = useSWR('/api/admin/departments', fetcher)
@@ -32,9 +31,8 @@ export default function AddFacultyPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
-    setError('')
-    setSuccess('')
-    const token = generateToken()
+    setShowCreds(null)
+    const employeeId = generateEmployeeId()
     const password = generatePassword()
     try {
       const formData = { 
@@ -42,37 +40,27 @@ export default function AddFacultyPage() {
         email: form.email,
         department: form.department,
         position: form.position,
-        tokenId: token,
-        password: password
+        employeeId,
+        password,
+        phoneNumber: form.phoneNumber || undefined
       }
-      console.log('Submitting faculty data:', formData)
-      
       const res = await fetch('/api/admin/faculty', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
       })
-      
       const data = await res.json()
-      console.log('Response status:', res.status)
-      console.log('Response data:', data)
-      
       if (!res.ok) {
-        console.error('Error response:', data)
-        throw new Error(data.error || data.details || 'Failed to add faculty')
+        toast.error(data.error || data.details || 'Failed to add faculty')
+        return
       }
-      
-      console.log('Faculty added successfully:', data)
-      setShowCreds({ token, password })
-      setSuccess('Faculty added successfully! Token: ' + token)
-      setForm({ name: '', email: '', department: '', position: '', password: '' })
-      
-      // Trigger dashboard updates
+      setShowCreds({ employeeId, password })
+      toast.success('Faculty added successfully!')
+      setForm({ name: '', email: '', department: '', position: '', password: '', phoneNumber: '' })
       mutate('/api/admin/faculty')
       mutate('/api/admin/faculty?new=true')
     } catch (err: any) {
-      console.error('Error in handleSubmit:', err)
-      setError(err.message || 'Failed to add faculty')
+      toast.error(err.message || 'Failed to add faculty')
     } finally {
       setLoading(false)
     }
@@ -129,6 +117,14 @@ export default function AddFacultyPage() {
             required 
           />
         </div>
+        <div>
+          <label className="block mb-1 font-semibold text-blue-800">Phone Number (optional)</label>
+          <Input 
+            placeholder="Phone Number" 
+            value={form.phoneNumber} 
+            onChange={e => setForm(f => ({ ...f, phoneNumber: e.target.value }))}
+          />
+        </div>
         <Button 
           type="submit" 
           disabled={loading} 
@@ -136,21 +132,11 @@ export default function AddFacultyPage() {
         >
           {loading ? 'Adding...' : 'Add Faculty'}
         </Button>
-        {error && (
-          <div className="text-red-500 p-3 rounded bg-red-50 border border-red-200">
-            Error: {error}
-          </div>
-        )}
-        {success && (
-          <div className="text-green-600 p-3 rounded bg-green-50 border border-green-200">
-            {success}
-          </div>
-        )}
       </form>
       {showCreds && (
         <div className="mt-4 p-4 bg-blue-50 rounded border border-blue-200">
           <div className="font-semibold text-blue-800 mb-2">Faculty Credentials:</div>
-          <div><b>Faculty Token:</b> {showCreds.token}</div>
+          <div><b>Employee ID:</b> {showCreds.employeeId}</div>
           <div><b>Password:</b> {showCreds.password}</div>
           <div className="text-xs text-gray-500 mt-2">
             Please securely share these credentials with the faculty member.

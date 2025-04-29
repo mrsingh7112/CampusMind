@@ -3,69 +3,74 @@ import { prisma } from '@/lib/prisma'
 
 export async function POST(request: Request) {
   try {
-    const { facultyId } = await request.json()
+    const { facultyId, credential } = await request.json()
 
-    if (!facultyId) {
-      return NextResponse.json({ error: 'Faculty ID is required' }, { status: 400 })
+    if (!facultyId || !credential) {
+      return NextResponse.json(
+        { error: 'Faculty ID and credential are required' },
+        { status: 400 }
+      )
     }
 
-    // Get faculty details
-    const faculty = await prisma.facultyMember.findUnique({
-      where: { id: facultyId },
+    // Get the stored credential
+    const storedCredential = await prisma.facultyWebAuthnCredential.findFirst({
+      where: { facultyId }
     })
 
-    if (!faculty) {
-      return NextResponse.json({ error: 'Faculty not found' }, { status: 404 })
+    if (!storedCredential) {
+      return NextResponse.json(
+        { error: 'No registered fingerprint found' },
+        { status: 404 }
+      )
     }
 
-    // Check if faculty has already marked attendance today
+    // Compare the credential IDs (both should be in base64url format)
+    if (storedCredential.credentialId !== credential.id) {
+      console.log('Credential mismatch:', {
+        stored: storedCredential.credentialId,
+        received: credential.id
+      })
+      return NextResponse.json(
+        { error: 'Fingerprint does not match' },
+        { status: 400 }
+      )
+    }
+
+    // Check if attendance already marked today
     const today = new Date()
     today.setHours(0, 0, 0, 0)
-    
+    const tomorrow = new Date(today)
+    tomorrow.setDate(tomorrow.getDate() + 1)
+
     const existingAttendance = await prisma.facultyAttendance.findFirst({
       where: {
         facultyId,
         date: {
           gte: today,
-          lt: new Date(today.getTime() + 24 * 60 * 60 * 1000),
-        },
-      },
+          lt: tomorrow
+        }
+      }
     })
 
     if (existingAttendance) {
-      return NextResponse.json(
-        { error: 'Attendance already marked for today' },
-        { status: 400 }
-      )
+      return NextResponse.json({
+        error: 'Attendance already marked for today'
+      }, { status: 400 })
     }
 
     // Mark attendance
-    const attendance = await prisma.facultyAttendance.create({
+    const now = new Date()
+    await prisma.facultyAttendance.create({
       data: {
         facultyId,
-        date: today,
-        time: new Date(),
+        date: now,
+        time: now,
       },
     })
 
-    // Update faculty status to ACTIVE
-    await prisma.facultyMember.update({
-      where: { id: facultyId },
-      data: { status: 'ACTIVE' },
-    })
-
-    // Schedule status update to INACTIVE after 8 hours
-    setTimeout(async () => {
-      await prisma.facultyMember.update({
-        where: { id: facultyId },
-        data: { status: 'INACTIVE' },
-      })
-    }, 8 * 60 * 60 * 1000) // 8 hours in milliseconds
-
     return NextResponse.json({
       success: true,
-      message: 'Attendance marked successfully',
-      data: attendance,
+      message: 'Attendance marked successfully'
     })
   } catch (error: any) {
     console.error('Error marking attendance:', error)

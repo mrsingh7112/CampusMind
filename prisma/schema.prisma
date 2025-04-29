@@ -7,170 +7,210 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User {
-  id            String   @id @default(cuid())
-  name          String
-  email         String   @unique
-  password      String
-  role          String   @default("STUDENT")
-  approved      Boolean  @default(false)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-}
-
-model FacultyMember {
-  id         String         @id @default(cuid())
-  name       String
-  email      String         @unique
-  department String
-  position   String
-  tokenId    String         @unique
-  password   String
-  status     String         @default("ACTIVE")
-  createdAt  DateTime       @default(now())
-  updatedAt  DateTime       @updatedAt
-  courses    FacultyCourse[]
-}
-
-model StudentMember {
-  id         String   @id @default(cuid())
-  name       String
-  email      String   @unique
-  department String
-  semester   Int
-  courseId   Int
-  tokenId    String   @unique
-  password   String
-  status     String   @default("ACTIVE")
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  course     Course   @relation(fields: [courseId], references: [id])
-}
-
-model Course {
-  id           Int             @id @default(autoincrement())
-  name         String
-  code         String          @unique
-  departmentId Int
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
-  department   Department      @relation(fields: [departmentId], references: [id])
-  studentAdds  StudentAdd[]
-  students     StudentMember[]
-  subjects     Subject[]
-  facultyCourses FacultyCourse[]
-}
-
-model Subject {
-  id       Int    @id @default(autoincrement())
-  name     String
-  semester Int
-  courseId Int
-  course   Course @relation(fields: [courseId], references: [id])
-}
-
-model Notification {
-  id            String   @id @default(cuid())
-  title         String
-  message       String
-  read          Boolean  @default(false)
-  createdAt     DateTime @default(now())
-  recipientId   String
-  recipientType String   // "USER" or "FACULTY"
-  status        String   @default("UNREAD")
-}
-
-model ActivityLog {
+// Admin Management
+model Admin {
   id        String   @id @default(cuid())
-  action    String
-  entity    String
-  details   String
+  name      String
+  email     String   @unique
+  password  String
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
+// Department Management
 model Department {
-  id      Int      @id @default(autoincrement())
-  name    String   @unique
-  courses Course[]
-}
-
-model PublicSignup {
-  id         String   @id @default(cuid())
-  name       String
-  email      String
-  password   String
-  role       UserRole
-  department String
-  position   String?
-  courseId   Int?
-  semester   Int?
-  tokenId    String   @unique
-  createdAt  DateTime @default(now())
-}
-
-model DashboardChartData {
-  id        String   @id @default(uuid())
-  type      String
-  data      Json
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  code      String   @unique
+  status    String   @default("ACTIVE")
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  courses   Course[]
 }
 
-model FacultyAttendance {
-  id        String   @id @default(cuid())
-  facultyId String
-  date      DateTime
-  time      DateTime
+// Course Management
+model Course {
+  id           Int       @id @default(autoincrement())
+  name         String
+  code         String    @unique
+  departmentId Int
+  duration     Int       @default(3) // Duration in years
+  status       String    @default("ACTIVE")
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  
+  // Relations
+  department     Department      @relation(fields: [departmentId], references: [id])
+  subjects       Subject[]
+  facultyCourses FacultyCourse[]
+  students       Student[]
+}
+
+// Subject Management
+model Subject {
+  id        Int      @id @default(autoincrement())
+  name      String
+  code      String   @unique
+  semester  Int
+  courseId  Int
+  credits   Int      @default(3)
+  status    String   @default("ACTIVE")
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relations
+  course    Course   @relation(fields: [courseId], references: [id])
 }
 
-model FacultyWebAuthnCredential {
+// Faculty Management
+model Faculty {
   id           String   @id @default(cuid())
-  facultyId    String
-  credentialId String   @unique
-  publicKey    String
+  name         String
+  email        String   @unique
+  password     String
+  department   String
+  position     String
+  employeeId   String   @unique
+  phoneNumber  String?
+  status       String   @default("ACTIVE")
   createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  courses    FacultyCourse[]
+  attendance FacultyAttendance[]
 }
 
-model FacultyAdd {
-  id         String   @id @default(cuid())
-  name       String
-  email      String   @unique
-  department String
-  position   String
-  tokenId    String   @unique
-  password   String
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+// Student Management
+model Student {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  password     String
+  rollNumber   String   @unique
+  courseId     Int
+  semester     Int
+  phoneNumber  String?
+  status       String   @default("ACTIVE")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  course     Course             @relation(fields: [courseId], references: [id])
+  attendance StudentAttendance[]
 }
 
-model StudentAdd {
-  id         String   @id @default(cuid())
-  name       String
-  email      String   @unique
-  department String
-  semester   Int
-  courseId   Int
-  tokenId    String   @unique
-  password   String
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  course     Course   @relation(fields: [courseId], references: [id])
+// Registration Management
+model FacultyRegistration {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  password     String
+  department   String
+  position     String
+  employeeId   String   @unique
+  phoneNumber  String?
+  status       String   @default("PENDING")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
+model StudentRegistration {
+  id          String   @id @default(cuid())
+  name        String
+  email       String   @unique
+  password    String
+  courseId    Int
+  phoneNumber String?
+  status      String   @default("PENDING")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// Course Assignment
 model FacultyCourse {
   id        String   @id @default(cuid())
   facultyId String
   courseId  Int
+  semester  Int
+  status    String   @default("ACTIVE")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  faculty   FacultyMember @relation(fields: [facultyId], references: [id])
-  course    Course    @relation(fields: [courseId], references: [id])
 
-  @@unique([facultyId, courseId])
+  // Relations
+  faculty   Faculty  @relation(fields: [facultyId], references: [id])
+  course    Course   @relation(fields: [courseId], references: [id])
+
+  @@unique([facultyId, courseId, semester])
 }
 
-enum UserRole {
-  ADMIN
-  FACULTY
-  STUDENT
+// Attendance Management
+model FacultyAttendance {
+  id        String   @id @default(cuid())
+  facultyId String
+  date      DateTime @db.Date
+  status    String   @default("PRESENT")
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  faculty   Faculty  @relation(fields: [facultyId], references: [id])
+
+  @@unique([facultyId, date])
+  @@index([date])
+}
+
+model StudentAttendance {
+  id        String   @id @default(cuid())
+  studentId String
+  date      DateTime @db.Date
+  status    String   @default("PRESENT")
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  student   Student  @relation(fields: [studentId], references: [id])
+
+  @@unique([studentId, date])
+  @@index([date])
+}
+
+// Notification System
+model Notification {
+  id            String   @id @default(cuid())
+  title         String
+  message       String
+  recipientId   String
+  recipientType String   // "FACULTY" or "STUDENT" or "ADMIN"
+  read          Boolean  @default(false)
+  status        String   @default("ACTIVE")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// Activity Logging
+model ActivityLog {
+  id          String   @id @default(cuid())
+  userId      String
+  userType    String   // "ADMIN" or "FACULTY" or "STUDENT"
+  action      String
+  entity      String
+  details     String
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+}
+
+// System Settings
+model SystemSettings {
+  id                String   @id @default(cuid())
+  academicYear      String
+  currentSemester   Int
+  registrationOpen  Boolean  @default(false)
+  maintenanceMode  Boolean  @default(false)
+  updatedBy        String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 }

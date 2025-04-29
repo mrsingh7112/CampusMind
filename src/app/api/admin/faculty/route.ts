@@ -1,24 +1,16 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { hash } from 'bcryptjs'
 
 // GET endpoint to fetch faculty
 export async function GET() {
   try {
-    const faculty = await prisma.facultyMember.findMany({
+    const faculty = await prisma.faculty.findMany({
       orderBy: { createdAt: 'desc' },
       include: {
-        courses: {
-          include: {
-            course: {
-              select: {
-                id: true,
-                name: true,
-                code: true
-              }
-            }
-          }
-        }
-      }
+        courses: true,
+        attendance: true,
+      },
     })
     return NextResponse.json(faculty)
   } catch (error) {
@@ -33,10 +25,10 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const data = await request.json()
-    const { name, email, department, position, tokenId, password } = data
+    const { name, email, department, position, employeeId, password, phoneNumber } = data
 
     // Validate required fields
-    if (!name || !email || !tokenId || !password) {
+    if (!name || !email || !employeeId || !password || !department || !position) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
@@ -44,7 +36,7 @@ export async function POST(request: Request) {
     }
 
     // Check if email already exists
-    const existingEmail = await prisma.facultyMember.findUnique({
+    const existingEmail = await prisma.faculty.findUnique({
       where: { email }
     })
     if (existingEmail) {
@@ -54,26 +46,30 @@ export async function POST(request: Request) {
       )
     }
 
-    // Check if token ID already exists
-    const existingToken = await prisma.facultyMember.findUnique({
-      where: { tokenId }
+    // Check if employeeId already exists
+    const existingEmployee = await prisma.faculty.findUnique({
+      where: { employeeId }
     })
-    if (existingToken) {
+    if (existingEmployee) {
       return NextResponse.json(
-        { error: 'Token ID already exists' },
+        { error: 'Employee ID already exists' },
         { status: 400 }
       )
     }
 
-    const faculty = await prisma.facultyMember.create({
+    // Hash password
+    const hashedPassword = await hash(password, 10)
+
+    const faculty = await prisma.faculty.create({
       data: {
         name,
         email,
         department,
         position,
-        tokenId,
-        password,
-        status: 'ACTIVE'
+        employeeId,
+        password: hashedPassword,
+        phoneNumber: phoneNumber || null,
+        status: 'ACTIVE',
       }
     })
 
@@ -100,7 +96,7 @@ export async function PATCH(request: Request) {
       )
     }
 
-    const faculty = await prisma.facultyMember.update({
+    const faculty = await prisma.faculty.update({
       where: { id },
       data: { status }
     })
@@ -127,7 +123,7 @@ export async function DELETE(request: Request) {
       )
     }
 
-    await prisma.facultyMember.delete({
+    await prisma.faculty.delete({
       where: { id }
     })
 

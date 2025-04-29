@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { hash } from 'bcryptjs'
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
     const isNew = searchParams.get('new') === 'true'
     
-    const students = await prisma.studentMember.findMany({
+    const students = await prisma.student.findMany({
       where: isNew ? {
         createdAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }
       } : {},
@@ -30,10 +31,13 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { name, email, courseId, semester, tokenId, password } = await request.json()
+    const body = await request.json()
+    console.log('Received student data:', body)
+    const { name, email, courseId, semester, rollNumber, password, phoneNumber } = body
 
     // Validate required fields
-    if (!name || !email || !courseId || !semester || !tokenId || !password) {
+    if (!name || !email || !courseId || !semester || !rollNumber || !password) {
+      console.log('Missing fields:', { name, email, courseId, semester, rollNumber, password })
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
@@ -44,20 +48,38 @@ export async function POST(request: Request) {
     })
 
     if (!course) {
+      console.log('Course not found:', courseId)
       return NextResponse.json({ error: 'Course not found' }, { status: 404 })
     }
 
+    // Check for existing email
+    const existingEmail = await prisma.student.findUnique({ where: { email } })
+    if (existingEmail) {
+      console.log('Email already exists:', email)
+      return NextResponse.json({ error: 'Email already exists' }, { status: 400 })
+    }
+
+    // Check for existing rollNumber
+    const existingRoll = await prisma.student.findUnique({ where: { rollNumber } })
+    if (existingRoll) {
+      console.log('Roll Number already exists:', rollNumber)
+      return NextResponse.json({ error: 'Roll Number already exists' }, { status: 400 })
+    }
+
+    // Hash password
+    const hashedPassword = await hash(password, 10)
+
     // Create the student
-    const student = await prisma.studentMember.create({
+    const student = await prisma.student.create({
       data: {
         name,
         email,
-        department: course.department.name,
         semester: parseInt(semester.toString(), 10),
         courseId: parseInt(courseId.toString(), 10),
-        tokenId,
-        password,
-        status: 'ACTIVE'
+        rollNumber,
+        password: hashedPassword,
+        phoneNumber: phoneNumber || null,
+        status: 'ACTIVE',
       },
       include: {
         course: {
@@ -69,11 +91,8 @@ export async function POST(request: Request) {
     })
 
     return NextResponse.json({ success: true, data: student })
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error adding student:', error)
-    if (error.code === 'P2002') {
-      return NextResponse.json({ error: 'Email or Token ID already exists' }, { status: 400 })
-    }
-    return NextResponse.json({ error: 'Failed to add student' }, { status: 500 })
+    return NextResponse.json({ error: error.message || 'Failed to add student', details: error }, { status: 500 })
   }
 }

@@ -25,11 +25,15 @@ export async function POST(request: Request) {
       )
     }
 
+    // Get the faculty and their stored challenge
+    const faculty = await prisma.facultyMember.findUnique({ where: { id: facultyId } });
+    const expectedChallenge = faculty?.webauthnChallenge || '';
+
     try {
       // Verify the credential
       const verification = await verifyRegistrationResponse({
         response: credential,
-        expectedChallenge: existingCredential.credentialId, // This should be the stored challenge
+        expectedChallenge,
         expectedOrigin: process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
         expectedRPID: process.env.WEBAUTHN_RP_ID || 'localhost',
       })

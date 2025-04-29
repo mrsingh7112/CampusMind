@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { toast } from 'sonner'
+import { arrayBufferToBase64url, base64urlToUint8Array } from '@/lib/webauthn'
 
 interface AttendanceMarkerProps {
   facultyId: string
@@ -30,19 +31,19 @@ export function AttendanceMarker({ facultyId, facultyName }: AttendanceMarkerPro
       const options = await optionsResponse.json()
 
       // Request fingerprint verification
-      const assertion = await navigator.credentials.get({
+      const credential = await navigator.credentials.get({
         publicKey: {
           ...options,
-          challenge: new Uint8Array(options.challenge),
-          allowCredentials: options.allowCredentials.map((credential: any) => ({
-            ...credential,
-            id: new Uint8Array(credential.id),
+          challenge: base64urlToUint8Array(options.challenge),
+          allowCredentials: options.allowCredentials.map((cred: any) => ({
+            ...cred,
+            id: base64urlToUint8Array(cred.id),
           })),
         },
       }) as PublicKeyCredential
 
-      // Verify fingerprint and mark attendance
-      const verifyResponse = await fetch('/api/faculty/attendance/mark', {
+      // Send credential for attendance marking
+      const markResponse = await fetch('/api/faculty/attendance/mark', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -50,18 +51,19 @@ export function AttendanceMarker({ facultyId, facultyName }: AttendanceMarkerPro
         body: JSON.stringify({
           facultyId,
           credential: {
-            id: assertion.id,
-            type: assertion.type,
-            rawId: Array.from(new Uint8Array(assertion.rawId)),
+            id: credential.id,
+            type: credential.type,
+            rawId: arrayBufferToBase64url(credential.rawId),
           },
         }),
       })
 
-      if (!verifyResponse.ok) {
-        throw new Error('Failed to mark attendance')
+      if (!markResponse.ok) {
+        const error = await markResponse.json()
+        throw new Error(error.error || 'Failed to mark attendance')
       }
 
-      const result = await verifyResponse.json()
+      const result = await markResponse.json()
       toast.success(result.message || 'Attendance marked successfully')
     } catch (error: any) {
       toast.error(error.message || 'Failed to mark attendance')

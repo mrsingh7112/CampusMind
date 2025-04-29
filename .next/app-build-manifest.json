@@ -21,6 +21,26 @@
       "static/chunks/main-app.js",
       "static/chunks/app/admin/dashboard/page.js"
     ],
+    "/admin/departments/add/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/admin/departments/add/page.js"
+    ],
+    "/admin/students/add/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/admin/students/add/page.js"
+    ],
+    "/admin/faculty/add/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/admin/faculty/add/page.js"
+    ],
+    "/admin/departments/manage/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/admin/departments/manage/page.js"
+    ],
     "/admin/faculty/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
@@ -36,20 +56,15 @@
       "static/chunks/main-app.js",
       "static/chunks/app/admin/faculty-attendance/page.js"
     ],
-    "/admin/faculty/add/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/admin/faculty/add/page.js"
-    ],
-    "/admin/students/add/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/admin/students/add/page.js"
-    ],
     "/admin/students/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/admin/students/page.js"
+    ],
+    "/admin/courses/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/admin/courses/page.js"
     ]
   }
 }

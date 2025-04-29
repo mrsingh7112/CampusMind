@@ -104,7 +104,11 @@ export default function FacultyAttendancePage() {
           credential: {
             id: credential.id,
             type: credential.type,
-            rawId: Array.from(new Uint8Array(credential.rawId)),
+            rawId: arrayBufferToBase64url(credential.rawId),
+            response: {
+              clientDataJSON: arrayBufferToBase64url(credential.response.clientDataJSON),
+              attestationObject: arrayBufferToBase64url(credential.response.attestationObject),
+            },
           },
         }),
       });
@@ -292,4 +296,13 @@ function base64urlToUint8Array(base64url: string) {
     buffer[i] = rawData.charCodeAt(i);
   }
   return buffer;
+}
+
+function arrayBufferToBase64url(buffer: ArrayBuffer) {
+  const bytes = new Uint8Array(buffer);
+  let str = '';
+  for (const charCode of bytes) {
+    str += String.fromCharCode(charCode);
+  }
+  return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 } 

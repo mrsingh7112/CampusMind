@@ -1,12 +1,15 @@
 {
+  "/api/admin/students/route": "app/api/admin/students/route.js",
+  "/api/admin/departments/route": "app/api/admin/departments/route.js",
   "/api/admin/faculty/route": "app/api/admin/faculty/route.js",
-  "/api/courses/route": "app/api/courses/route.js",
-  "/api/students/route": "app/api/students/route.js",
-  "/api/faculty/realtime/route": "app/api/faculty/realtime/route.js",
-  "/api/faculty/biometric/register/route": "app/api/faculty/biometric/register/route.js",
+  "/api/admin/publicsignup/route": "app/api/admin/publicsignup/route.js",
+  "/api/admin/dashboard-charts/route": "app/api/admin/dashboard-charts/route.js",
+  "/api/admin/activity-logs/route": "app/api/admin/activity-logs/route.js",
+  "/api/auth/[...nextauth]/route": "app/api/auth/[...nextauth]/route.js",
+  "/api/faculty/route": "app/api/faculty/route.js",
+  "/admin/departments/manage/page": "app/admin/departments/manage/page.js",
+  "/admin/dashboard/page": "app/admin/dashboard/page.js",
   "/admin/faculty/page": "app/admin/faculty/page.js",
-  "/admin/faculty/edit/[id]/page": "app/admin/faculty/edit/[id]/page.js",
-  "/admin/faculty-attendance/page": "app/admin/faculty-attendance/page.js",
-  "/admin/faculty/add/page": "app/admin/faculty/add/page.js",
-  "/admin/students/add/page": "app/admin/students/add/page.js"
+  "/admin/students/page": "app/admin/students/page.js",
+  "/admin/courses/page": "app/admin/courses/page.js"
 }

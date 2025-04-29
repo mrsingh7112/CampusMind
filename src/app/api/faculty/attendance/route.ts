@@ -1,49 +1,99 @@
 import { NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import prisma from '@/lib/prisma'
+import { prisma } from '@/lib/prisma'
 
 export async function POST(request: Request) {
   try {
-    const session = await getServerSession()
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const { facultyId, date, status, notes } = await request.json()
+
+    if (!facultyId || !date) {
+      return NextResponse.json(
+        { error: 'Faculty ID and date are required' },
+        { status: 400 }
+      )
     }
 
-    const data = await request.json()
-    const { classId, date, attendance } = data
-
-    // Validate faculty's permission to mark attendance for this class
-    const faculty = await prisma.user.findFirst({
-      where: {
-        email: session.user?.email,
-        role: 'FACULTY'
-      }
+    // Check if faculty exists
+    const faculty = await prisma.facultyMember.findUnique({
+      where: { id: facultyId }
     })
 
     if (!faculty) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json({ error: 'Faculty not found' }, { status: 404 })
     }
 
-    // Save attendance records
-    const attendanceRecords = Object.entries(attendance).map(([studentId, isPresent]) => ({
-      date: new Date(date),
-      studentId,
-      facultyId: faculty.id,
-      classId,
-      isPresent: isPresent as boolean
-    }))
-
-    // Create attendance records in bulk
-    await prisma.attendance.createMany({
-      data: attendanceRecords,
-      skipDuplicates: true
+    // Create or update attendance
+    const attendance = await prisma.facultyAttendance.upsert({
+      where: {
+        facultyId_date: {
+          facultyId,
+          date: new Date(date)
+        }
+      },
+      update: {
+        status,
+        notes
+      },
+      create: {
+        facultyId,
+        date: new Date(date),
+        status,
+        notes
+      }
     })
 
-    return NextResponse.json({ success: true })
+    return NextResponse.json(attendance)
   } catch (error) {
-    console.error('Error saving attendance:', error)
+    console.error('Attendance error:', error)
     return NextResponse.json(
-      { error: 'Failed to save attendance' },
+      { error: 'Failed to mark attendance' },
+      { status: 500 }
+    )
+  }
+}
+
+export async function GET(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const facultyId = searchParams.get('facultyId')
+    const startDate = searchParams.get('startDate')
+    const endDate = searchParams.get('endDate')
+
+    if (!facultyId) {
+      return NextResponse.json(
+        { error: 'Faculty ID is required' },
+        { status: 400 }
+      )
+    }
+
+    // Check if faculty exists
+    const faculty = await prisma.facultyMember.findUnique({
+      where: { id: facultyId }
+    })
+
+    if (!faculty) {
+      return NextResponse.json({ error: 'Faculty not found' }, { status: 404 })
+    }
+
+    // Build the where clause
+    const where: any = { facultyId }
+    if (startDate && endDate) {
+      where.date = {
+        gte: new Date(startDate),
+        lte: new Date(endDate)
+      }
+    }
+
+    // Get attendance records
+    const attendance = await prisma.facultyAttendance.findMany({
+      where,
+      orderBy: { date: 'desc' }
+    })
+
+    return NextResponse.json(attendance)
+  } catch (error) {
+    console.error('Attendance fetch error:', error)
+    return NextResponse.json(
+      { error: 'Failed to fetch attendance' },
       { status: 500 }
     )
   }

@@ -2,7 +2,8 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { PlusCircle, BookOpen, Building2, Layers } from "lucide-react"
+import { PlusCircle, BookOpen, Building2, Layers, Hash } from "lucide-react"
+import { toast } from "sonner"
 
 const DEPARTMENTS = [
   { label: "School of Computational Science", value: "School of Computational Science" },
@@ -45,6 +46,15 @@ export default function AddDepartmentPage() {
   const [currentCourse, setCurrentCourse] = useState("")
   const [currentSemester, setCurrentSemester] = useState<number | null>(null)
   const [subjectInput, setSubjectInput] = useState("")
+
+  // Generate department code preview
+  const getDepartmentCode = (name: string) => {
+    return name
+      .split(' ')
+      .map(word => word[0])
+      .join('')
+      .toUpperCase()
+  }
 
   // Add course to selected list
   const handleCourseSelect = (course: string) => {
@@ -115,7 +125,8 @@ export default function AddDepartmentPage() {
       }
       
       const result = await response.json()
-      alert("Department and courses added successfully!")
+      
+      toast.success("Department and courses have been added successfully!");
       
       // Reset form
       setDepartment("")
@@ -126,7 +137,7 @@ export default function AddDepartmentPage() {
       setSubjectInput("")
     } catch (error) {
       console.error('Error adding department:', error)
-      alert(`Failed to add department: ${error.message}`)
+      toast.error(error.message || 'Failed to add department')
     }
   }
 
@@ -138,19 +149,27 @@ export default function AddDepartmentPage() {
       <form onSubmit={handleSubmit}>
         <div className="mb-6">
           <label className="block mb-2 font-semibold text-blue-800">Department</label>
-          <div className="flex items-center gap-2">
-            <select
-              className="w-full border-2 border-blue-200 rounded-lg p-2 focus:ring-2 focus:ring-blue-400 bg-white"
-              value={department}
-              onChange={e => setDepartment(e.target.value)}
-              required
-            >
-              <option value="">Select Department</option>
-              {DEPARTMENTS.map(dep => (
-                <option key={dep.value} value={dep.value}>{dep.label}</option>
-              ))}
-            </select>
-            <Layers className="w-6 h-6 text-purple-400" />
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <select
+                className="w-full border-2 border-blue-200 rounded-lg p-2 focus:ring-2 focus:ring-blue-400 bg-white"
+                value={department}
+                onChange={e => setDepartment(e.target.value)}
+                required
+              >
+                <option value="">Select Department</option>
+                {DEPARTMENTS.map(dep => (
+                  <option key={dep.value} value={dep.value}>{dep.label}</option>
+                ))}
+              </select>
+              <Layers className="w-6 h-6 text-purple-400" />
+            </div>
+            {department && (
+              <div className="flex items-center gap-2 text-sm text-blue-600 bg-blue-50 p-2 rounded-lg">
+                <Hash className="w-4 h-4" />
+                <span>Department Code: <strong>{getDepartmentCode(department)}</strong></span>
+              </div>
+            )}
           </div>
         </div>
         <div className="mb-6">

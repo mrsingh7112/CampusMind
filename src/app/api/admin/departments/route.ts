@@ -87,58 +87,135 @@ export async function DELETE(request: Request) {
 export async function POST(request: Request) {
   try {
     const { type, departmentId, courseId, name, semester, courses } = await request.json()
-    let created
+
+    // Validate the request
+    if (!type) {
+      return NextResponse.json({ error: 'Type is required' }, { status: 400 })
+    }
+
     if (type === 'department') {
+      // Validate department name
+      if (!name || typeof name !== 'string') {
+        return NextResponse.json({ error: 'Department name is required' }, { status: 400 })
+      }
+
+      // Generate department code from name (e.g., "School of Management" -> "SOM")
+      const code = name
+        .split(' ')
+        .map(word => word[0])
+        .join('')
+        .toUpperCase()
+
+      // Check if department already exists
+      const existingDepartment = await prisma.department.findFirst({
+        where: {
+          OR: [
+            { name: { equals: name, mode: 'insensitive' } },
+            { code: code }
+          ]
+        }
+      })
+
+      if (existingDepartment) {
+        return NextResponse.json({ 
+          error: existingDepartment.name === name ? 'Department already exists' : 'Department code already exists' 
+        }, { status: 400 })
+      }
+
       // Create department
-      const createdDepartment = await prisma.department.create({ data: { name } })
+      const createdDepartment = await prisma.department.create({ 
+        data: { 
+          name,
+          code,
+          status: 'ACTIVE'
+        } 
+      })
+
       // Create courses and subjects if provided
       if (Array.isArray(courses)) {
         for (const course of courses) {
-          const createdCourse = await prisma.course.create({
-            data: {
-              name: course.name,
-              code: `${createdDepartment.name.substring(0, 3).toUpperCase()}-${Math.floor(Math.random() * 1000)}`,
-              departmentId: createdDepartment.id,
-            },
-          })
-          if (Array.isArray(course.subjects)) {
-            for (const subjGroup of course.subjects) {
-              if (Array.isArray(subjGroup.subjects)) {
-                for (const subjectName of subjGroup.subjects) {
-                  await prisma.subject.create({
-                    data: {
-                      name: subjectName,
-                      semester: subjGroup.semester,
-                      courseId: createdCourse.id,
-                    },
-                  })
+          if (!course.name) {
+            continue // Skip if course name is missing
+          }
+
+          try {
+            const courseCode = `${code}-${Math.floor(Math.random() * 1000)}`
+            const createdCourse = await prisma.course.create({
+              data: {
+                name: course.name,
+                code: courseCode,
+                departmentId: createdDepartment.id,
+                status: 'ACTIVE'
+              },
+            })
+
+            // Add subjects if they exist
+            if (Array.isArray(course.subjects)) {
+              for (const subjGroup of course.subjects) {
+                if (subjGroup.semester && Array.isArray(subjGroup.subjects)) {
+                  for (const subjectName of subjGroup.subjects) {
+                    if (subjectName) {
+                      const subjectCode = `${courseCode}-${subjGroup.semester}-${Math.floor(Math.random() * 100)}`
+                      await prisma.subject.create({
+                        data: {
+                          name: subjectName,
+                          code: subjectCode,
+                          semester: subjGroup.semester,
+                          courseId: createdCourse.id,
+                          status: 'ACTIVE'
+                        },
+                      })
+                    }
+                  }
                 }
               }
             }
+          } catch (courseError) {
+            console.error('Error creating course:', courseError)
+            // Continue with other courses even if one fails
           }
         }
       }
-      created = createdDepartment
+
+      return NextResponse.json({ 
+        success: true, 
+        created: createdDepartment 
+      })
     } else if (type === 'course') {
+      if (!departmentId || !name) {
+        return NextResponse.json({ error: 'Department ID and course name are required' }, { status: 400 })
+      }
+
       const department = await prisma.department.findUnique({ where: { id: departmentId } })
       if (!department) {
         return NextResponse.json({ error: 'Department not found' }, { status: 404 })
       }
-      created = await prisma.course.create({
+
+      const created = await prisma.course.create({
         data: {
           name,
           code: `${department.name.substring(0, 3).toUpperCase()}-${Math.floor(Math.random() * 1000)}`,
           departmentId,
         },
       })
+      return NextResponse.json({ success: true, created })
     } else if (type === 'subject') {
-      created = await prisma.subject.create({ data: { name, semester, courseId } })
+      if (!courseId || !name || !semester) {
+        return NextResponse.json({ error: 'Course ID, subject name, and semester are required' }, { status: 400 })
+      }
+
+      const created = await prisma.subject.create({ 
+        data: { name, semester, courseId } 
+      })
+      return NextResponse.json({ success: true, created })
     } else {
       return NextResponse.json({ error: 'Invalid type' }, { status: 400 })
     }
-    return NextResponse.json({ success: true, created })
   } catch (error) {
     console.error('Error adding:', error)
-    return NextResponse.json({ error: 'Failed to add' }, { status: 500 })
+    return NextResponse.json({ 
+      error: error.message || 'Failed to add',
+      details: error
+    }, { status: 500 })
   }
 } 
