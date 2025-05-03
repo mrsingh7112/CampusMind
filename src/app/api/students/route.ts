@@ -5,17 +5,23 @@ import { hash } from 'bcryptjs'
 // Get all students
 export async function GET() {
   try {
-    const students = await prisma.studentMember.findMany({
-      orderBy: { createdAt: 'desc' },
-      include: { course: true }
-    })
-    
-    // Log activity
-    await prisma.activityLog.create({
-      data: {
-        action: 'READ',
-        entity: 'STUDENT',
-        details: 'Retrieved student list'
+    const students = await prisma.student.findMany({
+      include: {
+        course: {
+          include: {
+            department: {
+              select: {
+                id: true,
+                name: true,
+                code: true
+              }
+            }
+          }
+        },
+        attendance: true
+      },
+      orderBy: {
+        name: 'asc'
       }
     })
     
@@ -29,44 +35,46 @@ export async function GET() {
 // Add new student
 export async function POST(request: Request) {
   try {
-    const { name, email, department, semester, courseId, tokenId, password } = await request.json()
+    const data = await request.json()
+    let { name, email, courseId, semester, rollNumber, password } = data
 
-    // Validate required fields
-    if (!name || !email || !department || !semester || !courseId || !tokenId || !password) {
+    // Validate required fields (except rollNumber)
+    if (!name || !email || !courseId || !semester || !password) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
-    // Check for existing email
-    const existingEmail = await prisma.studentMember.findUnique({ where: { email } })
+    // Auto-generate rollNumber if not provided
+    if (!rollNumber || rollNumber.trim() === '') {
+      const count = await prisma.student.count()
+      const year = new Date().getFullYear()
+      rollNumber = `STU${count + 1}-${year}`
+    }
+
+    // Check if email already exists
+    const existingEmail = await prisma.student.findUnique({ where: { email } })
     if (existingEmail) {
       return NextResponse.json({ error: 'Email already exists' }, { status: 400 })
     }
 
-    // Check for existing tokenId
-    const existingToken = await prisma.studentMember.findUnique({ where: { tokenId } })
-    if (existingToken) {
-      return NextResponse.json({ error: 'Token ID already exists' }, { status: 400 })
+    // Check if roll number already exists
+    const existingRoll = await prisma.student.findUnique({ where: { rollNumber } })
+    if (existingRoll) {
+      return NextResponse.json({ error: 'Roll number already exists' }, { status: 400 })
     }
 
-    // Verify course exists
-    const course = await prisma.course.findUnique({ where: { id: courseId } })
-    if (!course) {
-      return NextResponse.json({ error: 'Course not found' }, { status: 400 })
-    }
-
-    // Hash password
+    // Hash the password
     const hashedPassword = await hash(password, 10)
 
     // Create student
-    const student = await prisma.studentMember.create({
+    const student = await prisma.student.create({
       data: {
         name,
         email,
-        department,
-        semester: parseInt(semester.toString()),
-        courseId: parseInt(courseId.toString()),
-        tokenId,
+        courseId,
+        semester: parseInt(semester),
+        rollNumber,
         password: hashedPassword,
+        status: 'ACTIVE'
       },
       include: {
         course: true
@@ -78,26 +86,19 @@ export async function POST(request: Request) {
       data: {
         action: 'CREATE',
         entity: 'STUDENT',
-        details: `Created student: ${name}`
+        details: `Created student: ${name}`,
+        userId: 'admin',
+        userType: 'ADMIN',
       }
     })
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        id: student.id,
-        name: student.name,
-        email: student.email,
-        department: student.department,
-        semester: student.semester,
-        courseId: student.courseId,
-        course: student.course,
-        tokenId: student.tokenId
-      }
+    return NextResponse.json({ 
+      success: true, 
+      data: student 
     })
   } catch (error: any) {
     console.error('Error creating student:', error)
-    return NextResponse.json({
+    return NextResponse.json({ 
       error: 'Failed to create student',
       details: error.message
     }, { status: 500 })
@@ -114,7 +115,7 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: 'Student ID is required' }, { status: 400 })
     }
 
-    const student = await prisma.studentMember.delete({
+    const student = await prisma.student.delete({
       where: { id }
     })
 

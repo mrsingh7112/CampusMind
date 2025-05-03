@@ -3,14 +3,14 @@ import { prisma } from '@/lib/prisma'
 
 export async function POST(request: Request) {
   try {
-    const { facultyId, courseId } = await request.json()
+    const { facultyId, courseId, semester } = await request.json()
 
-    if (!facultyId || !courseId) {
-      return NextResponse.json({ error: 'Faculty ID and Course ID are required' }, { status: 400 })
+    if (!facultyId || !courseId || semester === undefined) {
+      return NextResponse.json({ error: 'Faculty ID, Course ID, and Semester are required' }, { status: 400 })
     }
 
     // Check if faculty exists
-    const faculty = await prisma.facultyMember.findUnique({
+    const faculty = await prisma.faculty.findUnique({
       where: { id: facultyId }
     })
 
@@ -27,12 +27,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Course not found' }, { status: 404 })
     }
 
+    // Check if semester is valid
+    if (!semester || isNaN(semester) || semester < 1) {
+      return NextResponse.json({ error: 'Semester is invalid or not provided' }, { status: 400 })
+    }
+
     // Check if assignment already exists
     const existingAssignment = await prisma.facultyCourse.findUnique({
       where: {
-        facultyId_courseId: {
+        facultyId_courseId_semester: {
           facultyId: faculty.id,
-          courseId: course.id
+          courseId: course.id,
+          semester: semester
         }
       }
     })
@@ -45,7 +51,8 @@ export async function POST(request: Request) {
     const assignment = await prisma.facultyCourse.create({
       data: {
         facultyId: faculty.id,
-        courseId: course.id
+        courseId: course.id,
+        semester: semester
       }
     })
 
@@ -54,7 +61,9 @@ export async function POST(request: Request) {
       data: {
         action: 'ASSIGN',
         entity: 'FACULTY_COURSE',
-        details: `Assigned course ${course.name} to faculty ${faculty.name}`
+        details: `Assigned course ${course.name} to faculty ${faculty.name}`,
+        userId: 'admin',
+        userType: 'ADMIN'
       }
     })
 

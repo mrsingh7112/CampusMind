@@ -96,3 +96,71 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message || 'Failed to add student', details: error }, { status: 500 })
   }
 }
+
+// PATCH: Update student status and deactivation period
+export async function PATCH(request: Request) {
+  try {
+    const { id, status, deactivatedFrom, deactivatedTo } = await request.json();
+    if (!id) {
+      return NextResponse.json({ error: 'Student ID is required' }, { status: 400 });
+    }
+
+    // Find the student first
+    const student = await prisma.student.findUnique({ where: { id } });
+    if (!student) {
+      return NextResponse.json({ error: 'Student not found' }, { status: 404 });
+    }
+
+    // Check for rustication (3 deactivations)
+    if (status === 'INACTIVE' && ((student.deactivationCount ?? 0) + 1) >= 3) {
+      // Delete related attendance
+      await prisma.studentAttendance.deleteMany({ where: { studentId: id } });
+      // Delete the student
+      await prisma.student.delete({ where: { id } });
+      // Log activity
+      await prisma.activityLog.create({
+        data: {
+          userId: 'admin',
+          userType: 'ADMIN',
+          action: 'RUSTICATE',
+          entity: 'STUDENT',
+          details: `Student rusticated and deleted after 3 deactivations: ${student.name}`,
+        },
+      });
+      return NextResponse.json({ success: true, rusticated: true });
+    }
+
+    // Normal update
+    const updatedStudent = await prisma.student.update({
+      where: { id },
+      data: {
+        status,
+        ...(status === 'INACTIVE' ? {
+          deactivatedFrom: deactivatedFrom ? new Date(deactivatedFrom) : new Date(),
+          deactivatedTo: deactivatedTo ? new Date(deactivatedTo) : null,
+          deactivationCount: { increment: 1 }
+        } : {
+          deactivatedFrom: null,
+          deactivatedTo: null,
+          deactivationCount: 0
+        })
+      },
+    });
+
+    // Log activity
+    await prisma.activityLog.create({
+      data: {
+        userId: 'admin',
+        userType: 'ADMIN',
+        action: 'UPDATE',
+        entity: 'STUDENT',
+        details: `Updated student status: ${student.name} to ${status}`,
+      },
+    });
+
+    return NextResponse.json({ success: true, data: updatedStudent });
+  } catch (error) {
+    console.error('Error updating student:', error);
+    return NextResponse.json({ error: 'Failed to update student' }, { status: 500 });
+  }
+}

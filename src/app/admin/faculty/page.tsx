@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useRouter } from 'next/navigation'
+import { Edit2, Bell, Ban, Layers } from 'lucide-react'
 
 interface Faculty {
   id: string
@@ -11,7 +12,7 @@ interface Faculty {
   email: string
   department: string
   position: string
-  tokenId: string
+  employeeId: string
   status: string
   assignedCourses?: {
     course: {
@@ -23,10 +24,10 @@ interface Faculty {
 }
 
 interface Course {
-  id: string
+  id: number
   name: string
   code: string
-  departmentId: string
+  departmentId: number
 }
 
 export default function AdminFacultyPage() {
@@ -43,6 +44,7 @@ export default function AdminFacultyPage() {
   const [notificationTitle, setNotificationTitle] = useState('')
   const [notificationMessage, setNotificationMessage] = useState('')
   const [assignLoading, setAssignLoading] = useState(false)
+  const [selectedSemester, setSelectedSemester] = useState('')
   const router = useRouter()
 
   // Fetch faculty data with courses
@@ -73,10 +75,12 @@ export default function AdminFacultyPage() {
     }
   }
 
-  // Initial data fetch
+  // Initial data fetch and polling for real-time updates
   useEffect(() => {
     fetchData()
     fetchCourses()
+    const interval = setInterval(fetchData, 5000) // Refresh every 5 seconds
+    return () => clearInterval(interval)
   }, [])
 
   // Handle faculty removal
@@ -97,10 +101,10 @@ export default function AdminFacultyPage() {
   // Handle status change
   const handleStatusChange = async (id: string, newStatus: string) => {
     try {
-      const res = await fetch(`/api/admin/faculty/${id}`, {
+      const res = await fetch(`/api/admin/faculty`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus })
+        body: JSON.stringify({ id, status: newStatus })
       })
       if (!res.ok) throw new Error('Failed to update status')
       fetchData()
@@ -113,8 +117,8 @@ export default function AdminFacultyPage() {
 
   // Handle course assignment
   const handleAssignCourse = async () => {
-    if (!selectedFaculty || !selectedCourse) {
-      setError('Please select a course')
+    if (!selectedFaculty || !selectedCourse || !selectedSemester) {
+      setError('Please select a course and semester')
       return
     }
 
@@ -128,7 +132,8 @@ export default function AdminFacultyPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           facultyId: selectedFaculty.id,
-          courseId: selectedCourse
+          courseId: Number(selectedCourse),
+          semester: parseInt(selectedSemester)
         })
       })
 
@@ -139,9 +144,10 @@ export default function AdminFacultyPage() {
       }
 
       setSuccess(`Successfully assigned ${data.data.courseName} to ${data.data.facultyName}`)
-      fetchData()
+      fetchData() // Refresh data immediately
       setShowAssignModal(false)
       setSelectedCourse('')
+      setSelectedSemester('')
     } catch (err: any) {
       console.error('Error assigning course:', err)
       setError(err.message || 'Failed to assign course')
@@ -174,199 +180,144 @@ export default function AdminFacultyPage() {
   }
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Faculty Management</h1>
-        <Button 
-          variant="default" 
-          className="bg-blue-600 hover:bg-blue-700 text-white"
-          onClick={() => window.location.href = '/admin/faculty/add'}
-        >
-          Add Faculty
-        </Button>
-      </div>
-
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded mb-4">
-          {error}
+    <div className="container mx-auto py-8 px-4">
+      <div className="bg-white shadow-lg rounded-xl p-6">
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-2xl font-bold text-gray-900">Faculty Management</h1>
+          <Button className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-2 rounded-lg shadow" onClick={() => window.location.href = '/admin/faculty/add'}>Add Faculty</Button>
         </div>
-      )}
-
-      {success && (
-        <div className="bg-green-50 border border-green-200 text-green-700 p-3 rounded mb-4">
-          {success}
-        </div>
-      )}
-
-      {loading ? (
-        <div className="flex flex-col items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-3"></div>
-          <p className="text-gray-600">Loading faculty data...</p>
-        </div>
-      ) : faculty.length === 0 ? (
-        <div className="text-center py-12 bg-white rounded-lg shadow">
-          <p className="text-gray-600 mb-4">No faculty members found</p>
-          <Button 
-            variant="outline"
-            onClick={() => window.location.href = '/admin/faculty/add'}
-          >
-            Add Your First Faculty Member
-          </Button>
-        </div>
-      ) : (
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead>
-              <tr className="bg-gray-50">
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Department</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Position</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Token ID</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+        <div className="overflow-x-auto rounded-lg border border-gray-200">
+          <table className="w-full">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="py-4 px-6 text-left text-sm font-bold text-gray-700">Name</th>
+                <th className="py-4 px-6 text-left text-sm font-bold text-gray-700">Email</th>
+                <th className="py-4 px-6 text-left text-sm font-bold text-gray-700">Department</th>
+                <th className="py-4 px-6 text-left text-sm font-bold text-gray-700">Position</th>
+                <th className="py-4 px-6 text-left text-sm font-bold text-gray-700">Employee ID</th>
+                <th className="py-4 px-6 text-left text-sm font-bold text-gray-700">Status</th>
+                <th className="py-4 px-6 text-left text-sm font-bold text-gray-700">Assigned Courses</th>
+                <th className="py-4 px-6 text-left text-sm font-bold text-gray-700">Actions</th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="divide-y divide-gray-200">
               {faculty.map((member) => (
-                <tr 
-                  key={member.id} 
-                  className="hover:bg-gray-50 cursor-pointer transition-colors"
-                  onClick={() => {
-                    setSelectedFaculty(member)
-                    setShowDetailsModal(true)
+                <tr
+                  key={member.id}
+                  className="hover:bg-blue-50 transition cursor-pointer group"
+                  tabIndex={0}
+                  onClick={e => {
+                    // Prevent opening modal if clicking on an action button
+                    if ((e.target as HTMLElement).closest('button')) return;
+                    setSelectedFaculty(member);
+                    setShowDetailsModal(true);
+                  }}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      setSelectedFaculty(member);
+                      setShowDetailsModal(true);
+                    }
                   }}
                 >
-                  <td className="px-6 py-4 whitespace-nowrap">{member.name}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">{member.email}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">{member.department || 'Not set'}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">{member.position || 'Not set'}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">{member.tokenId}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      member.status === 'ACTIVE' 
-                        ? 'bg-green-100 text-green-800' 
-                        : 'bg-gray-100 text-gray-800'
-                    }`}>
+                  <td className="py-4 px-6 font-semibold text-blue-800 group-hover:underline">{member.name}</td>
+                  <td className="py-4 px-6 text-gray-700">{member.email}</td>
+                  <td className="py-4 px-6">
+                    <span className="inline-block bg-blue-100 text-blue-800 text-xs font-semibold px-3 py-1 rounded-full">
+                      {member.department}
+                    </span>
+                  </td>
+                  <td className="py-4 px-6 text-gray-700">{member.position}</td>
+                  <td className="py-4 px-6">
+                    <span className="inline-block bg-purple-100 text-purple-700 text-xs font-mono px-3 py-1 rounded-full">
+                      {member.employeeId}
+                    </span>
+                  </td>
+                  <td className="py-4 px-6">
+                    <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold ${member.status === 'ACTIVE' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                       {member.status}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <Button 
-                      variant="destructive" 
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleRemove(member.id)
-                      }}
-                      className="text-sm"
-                    >
-                      Remove
-                    </Button>
+                  <td className="py-4 px-6">
+                    {member.assignedCourses && member.assignedCourses.length > 0 ? (
+                      <div className="flex flex-wrap gap-1">
+                        {member.assignedCourses.map((ac, idx) => (
+                          <span key={idx} className="inline-block bg-indigo-100 text-indigo-700 text-xs px-2 py-0.5 rounded-full">
+                            {ac.course.name}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-gray-400 text-xs">None</span>
+                    )}
+                  </td>
+                  <td className="py-4 px-6">
+                    <div className="flex gap-2">
+                      <Button size="icon" variant="outline" className="hover:bg-blue-100" title="Edit" onClick={e => { e.stopPropagation(); router.push(`/admin/faculty/edit/${member.id}`); }}>
+                        <Edit2 className="w-4 h-4 text-blue-600" />
+                      </Button>
+                      <Button size="icon" variant="outline" className="hover:bg-gray-100" title="Details" onClick={e => { e.stopPropagation(); setSelectedFaculty(member); setShowDetailsModal(true); }}>
+                        <Layers className="w-4 h-4 text-gray-600" />
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-      )}
+      </div>
 
       {/* Faculty Details Modal */}
       {showDetailsModal && selectedFaculty && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-blue-700">Faculty Details</h2>
-              <button 
-                onClick={() => setShowDetailsModal(false)}
-                className="text-gray-500 hover:text-gray-700 text-2xl"
-              >
-                ×
-              </button>
-            </div>
-
-            <div className="space-y-4">
+        <div className="fixed inset-0 flex items-center justify-center z-50 bg-black/30">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 relative">
+            <button className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl font-bold" onClick={() => setShowDetailsModal(false)}>
+              &times;
+            </button>
+            <h2 className="text-2xl font-bold text-blue-700 mb-4 flex items-center gap-2">
+              Faculty Details
+            </h2>
+            <div className="space-y-2">
+              <div><span className="font-semibold">Name:</span> {selectedFaculty.name}</div>
+              <div><span className="font-semibold">Email:</span> {selectedFaculty.email}</div>
               <div>
-                <label className="font-semibold">Name:</label>
-                <p>{selectedFaculty.name}</p>
+                <span className="font-semibold">Department:</span>
+                <span className="ml-2 px-2 py-0.5 rounded bg-blue-100 text-blue-700 text-xs">{selectedFaculty.department}</span>
+              </div>
+              <div><span className="font-semibold">Position:</span> {selectedFaculty.position}</div>
+              <div>
+                <span className="font-semibold">Employee ID:</span>
+                <span className="ml-2 px-2 py-0.5 rounded bg-purple-100 text-purple-700 text-xs">{selectedFaculty.employeeId}</span>
               </div>
               <div>
-                <label className="font-semibold">Email:</label>
-                <p>{selectedFaculty.email}</p>
+                <span className="font-semibold">Status:</span>
+                <span className={`ml-2 px-2 py-0.5 rounded text-xs ${selectedFaculty.status === 'ACTIVE' ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-700'}`}>
+                  {selectedFaculty.status}
+                </span>
               </div>
               <div>
-                <label className="font-semibold">Department:</label>
-                <p>{selectedFaculty.department || 'Not set'}</p>
-              </div>
-              <div>
-                <label className="font-semibold">Position:</label>
-                <p>{selectedFaculty.position || 'Not set'}</p>
-              </div>
-              <div>
-                <label className="font-semibold">Token ID:</label>
-                <p>{selectedFaculty.tokenId}</p>
-              </div>
-              <div>
-                <label className="font-semibold">Status:</label>
-                <p>
-                  <span className={`px-2 py-1 rounded-full text-xs ${
-                    selectedFaculty.status === 'ACTIVE' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                  }`}>
-                    {selectedFaculty.status}
-                  </span>
-                </p>
-              </div>
-              <div>
-                <label className="font-semibold">Assigned Courses:</label>
+                <span className="font-semibold">Assigned Courses:</span>
                 {selectedFaculty.assignedCourses && selectedFaculty.assignedCourses.length > 0 ? (
-                  <ul className="mt-1 space-y-1">
-                    {selectedFaculty.assignedCourses.map((assignment) => (
-                      <li key={assignment.course.id} className="text-sm">
-                        {assignment.course.name} ({assignment.course.code})
+                  <ul className="ml-2 flex flex-wrap gap-2 mt-1">
+                    {selectedFaculty.assignedCourses.map((c) => (
+                      <li key={c.course.id} className="bg-blue-50 px-2 py-0.5 rounded text-blue-700 text-xs">
+                        {c.course.name} <span className="text-gray-500">({c.course.code})</span>
                       </li>
                     ))}
                   </ul>
                 ) : (
-                  <p className="text-gray-500 text-sm">No courses assigned</p>
+                  <span className="ml-2 text-gray-500">No courses assigned</span>
                 )}
               </div>
-
-              <div className="flex gap-2 mt-6">
-                <Button 
-                  onClick={() => {
-                    router.push(`/admin/faculty/edit/${selectedFaculty.id}`);
-                    setShowDetailsModal(false);
-                  }}
-                >
-                  Edit
-                </Button>
-                <Button 
-                  variant="outline"
-                  onClick={() => {
-                    setShowDetailsModal(false)
-                    setShowAssignModal(true)
-                  }}
-                >
-                  Assign to Course
-                </Button>
-                <Button 
-                  variant="outline"
-                  onClick={() => {
-                    setShowDetailsModal(false)
-                    setShowNotificationModal(true)
-                  }}
-                >
-                  Send Notification
-                </Button>
-                <Button 
-                  variant="destructive"
-                  onClick={() => handleStatusChange(selectedFaculty.id, 
-                    selectedFaculty.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE'
-                  )}
-                >
-                  {selectedFaculty.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
-                </Button>
-              </div>
+            </div>
+            <div className="flex flex-wrap gap-2 mt-6">
+              <Button onClick={() => {
+                setShowDetailsModal(false);
+                router.push(`/admin/faculty/edit/${selectedFaculty.id}`);
+              }} variant="outline"><Edit2 className="w-4 h-4 mr-1" /> Edit</Button>
+              <Button onClick={() => setShowAssignModal(true)} variant="outline"><Layers className="w-4 h-4 mr-1" /> Assign to Course</Button>
+              <Button onClick={() => setShowNotificationModal(true)} variant="outline"><Bell className="w-4 h-4 mr-1" /> Notify</Button>
+              <Button onClick={() => handleStatusChange(selectedFaculty.id, selectedFaculty.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE')} variant="destructive"><Ban className="w-4 h-4 mr-1" /> {selectedFaculty.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}</Button>
             </div>
           </div>
         </div>
@@ -405,7 +356,21 @@ export default function AdminFacultyPage() {
                   ))}
                 </select>
               </div>
-
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Semester
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="8"
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  value={selectedSemester}
+                  onChange={e => setSelectedSemester(e.target.value)}
+                  disabled={assignLoading}
+                  placeholder="Enter semester (e.g. 1, 2, 3...)"
+                />
+              </div>
               <div className="flex justify-end gap-2">
                 <Button 
                   variant="outline" 

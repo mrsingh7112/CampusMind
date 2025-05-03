@@ -10,7 +10,7 @@ export async function POST(request: Request) {
     }
 
     // Check if faculty exists
-    const faculty = await prisma.facultyMember.findUnique({
+    const faculty = await prisma.faculty.findUnique({
       where: { id: facultyId }
     })
 
@@ -25,7 +25,7 @@ export async function POST(request: Request) {
         message,
         recipientId: facultyId,
         recipientType: 'FACULTY',
-        status: 'UNREAD'
+        status: 'ACTIVE'
       }
     })
 
@@ -34,7 +34,9 @@ export async function POST(request: Request) {
       data: {
         action: 'NOTIFY',
         entity: 'FACULTY',
-        details: `Sent notification to faculty ${faculty.name}`
+        details: `Sent notification to faculty ${faculty.name}`,
+        userId: 'admin',
+        userType: 'ADMIN'
       }
     })
 

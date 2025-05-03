@@ -92,6 +92,9 @@ model Student {
   semester     Int
   phoneNumber  String?
   status       String   @default("ACTIVE")
+  deactivatedFrom DateTime?
+  deactivatedTo   DateTime?
+  deactivationCount Int    @default(0)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

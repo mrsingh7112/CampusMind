@@ -4,14 +4,8 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { format } from 'date-fns';
+import { format, formatISO } from 'date-fns';
 import { toast } from 'sonner';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 
 interface Faculty {
   id: string;
@@ -19,17 +13,14 @@ interface Faculty {
   email: string;
   department: string;
   status: string;
-  hasBiometric: boolean;
-  lastMarked: string | null;
-  tokenId: string;
+  attendanceStatus?: string;
 }
 
 export default function FacultyAttendancePage() {
   const [faculty, setFaculty] = useState<Faculty[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedFaculty, setSelectedFaculty] = useState<Faculty | null>(null);
-  const [isSetupOpen, setIsSetupOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(new Date());
 
   // Fetch data every 30 seconds
   useEffect(() => {
@@ -40,7 +31,7 @@ export default function FacultyAttendancePage() {
 
   const fetchFacultyData = async () => {
     try {
-      const res = await fetch('/api/faculty/realtime');
+      const res = await fetch(`/api/faculty/realtime?date=${format(selectedDate, 'yyyy-MM-dd')}`);
       if (!res.ok) throw new Error('Failed to fetch faculty data');
       const data = await res.json();
       setFaculty(data);
@@ -52,130 +43,35 @@ export default function FacultyAttendancePage() {
     }
   };
 
-  const handleSetupFingerprint = async (faculty: Faculty) => {
-    setSelectedFaculty(faculty);
-    setIsSetupOpen(true);
-  };
-
-  const handleRegisterFingerprint = async () => {
-    if (!selectedFaculty) return;
-    setIsProcessing(true);
-
-    try {
-      // Check if WebAuthn is supported
-      if (!window.PublicKeyCredential) {
-        throw new Error('WebAuthn is not supported by this browser');
-      }
-
-      // Start registration
-      const startRes = await fetch('/api/faculty/biometric/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          facultyId: selectedFaculty.id,
-          name: selectedFaculty.name,
-        }),
-      });
-
-      if (!startRes.ok) {
-        throw new Error('Failed to start registration');
-      }
-
-      const options = await startRes.json();
-
-      // Create credentials
-      const credential = await navigator.credentials.create({
-        publicKey: {
-          ...options,
-          challenge: base64urlToUint8Array(options.challenge),
-          user: {
-            ...options.user,
-            id: base64urlToUint8Array(options.user.id),
-          },
-        },
-      }) as PublicKeyCredential;
-
-      // Verify registration
-      const verifyRes = await fetch('/api/faculty/biometric/verify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          facultyId: selectedFaculty.id,
-          credential: {
-            id: credential.id,
-            type: credential.type,
-            rawId: arrayBufferToBase64url(credential.rawId),
-            response: {
-              clientDataJSON: arrayBufferToBase64url(credential.response.clientDataJSON),
-              attestationObject: arrayBufferToBase64url(credential.response.attestationObject),
-            },
-          },
-        }),
-      });
-
-      if (!verifyRes.ok) {
-        throw new Error('Failed to verify fingerprint');
-      }
-
-      toast.success('Fingerprint registered successfully');
-      setIsSetupOpen(false);
-      fetchFacultyData();
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to register fingerprint');
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const handleMarkAttendance = async (faculty: Faculty) => {
+  const handleManualMark = async (facultyId: string, status: string) => {
     setIsProcessing(true);
     try {
-      // Get authentication options
-      const optionsRes = await fetch('/api/faculty/biometric/authenticate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ facultyId: faculty.id }),
-      });
-
-      if (!optionsRes.ok) {
-        throw new Error('Failed to start authentication');
-      }
-
-      const options = await optionsRes.json();
-
-      // Get credential
-      const assertion = await navigator.credentials.get({
-        publicKey: {
-          ...options,
-          challenge: base64urlToUint8Array(options.challenge),
-          allowCredentials: options.allowCredentials.map((cred: any) => ({
-            ...cred,
-            id: base64urlToUint8Array(cred.id),
-          })),
-        },
-      }) as PublicKeyCredential;
-
-      // Mark attendance
-      const markRes = await fetch('/api/faculty/attendance/mark', {
+      const res = await fetch('/api/faculty/attendance/mark', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          facultyId: faculty.id,
-          credential: {
-            id: assertion.id,
-            type: assertion.type,
-            rawId: Array.from(new Uint8Array(assertion.rawId)),
-          },
-        }),
+          facultyId,
+          date: formatISO(selectedDate, { representation: 'date' }),
+          status,
+          manual: true
+        })
       });
-
-      if (!markRes.ok) {
-        throw new Error('Failed to mark attendance');
+      
+      const data = await res.json();
+      
+      if (!res.ok) {
+        if (data.existingStatus) {
+          toast.error(`Already marked as ${data.existingStatus}`);
+        } else {
+          throw new Error(data.error || 'Failed to mark attendance');
+        }
+        return;
       }
-
-      toast.success('Attendance marked successfully');
+      
+      toast.success(`Marked as ${status}`);
       fetchFacultyData();
     } catch (error: any) {
+      console.error('Error marking attendance:', error);
       toast.error(error.message || 'Failed to mark attendance');
     } finally {
       setIsProcessing(false);
@@ -183,72 +79,118 @@ export default function FacultyAttendancePage() {
   };
 
   return (
-    <div className="container mx-auto py-8">
-      <Card>
-        <CardHeader>
-          <CardTitle>Faculty Attendance Management</CardTitle>
+    <div className="container mx-auto py-8 px-4">
+      <Card className="shadow-lg">
+        <CardHeader className="bg-gradient-to-r from-blue-600 to-blue-800 text-white rounded-t-lg">
+          <CardTitle className="text-2xl font-bold">Faculty Attendance Management</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-6">
+          <div className="mb-6 flex items-center justify-between bg-gray-50 p-4 rounded-lg">
+            <div className="flex items-center gap-4">
+              <label className="font-semibold text-gray-700">Select Date:</label>
+              <input
+                type="date"
+                value={format(selectedDate, 'yyyy-MM-dd')}
+                onChange={e => { setSelectedDate(new Date(e.target.value)); setLoading(true); fetchFacultyData(); }}
+                className="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1">
+                <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                <span className="text-sm text-gray-600">Present</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                <span className="text-sm text-gray-600">Absent</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <div className="w-3 h-3 rounded-full bg-gray-300"></div>
+                <span className="text-sm text-gray-600">Not Marked</span>
+              </div>
+            </div>
+          </div>
+
           {loading ? (
             <div className="flex justify-center items-center h-40">
-              <p>Loading...</p>
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto rounded-lg border border-gray-200">
               <table className="w-full">
-                <thead>
-                  <tr className="border-b">
-                    <th className="py-3 px-4 text-left">Name</th>
-                    <th className="py-3 px-4 text-left">Department</th>
-                    <th className="py-3 px-4 text-left">Status</th>
-                    <th className="py-3 px-4 text-left">Last Marked</th>
-                    <th className="py-3 px-4 text-left">Actions</th>
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="py-4 px-6 text-left text-sm font-semibold text-gray-700">Name</th>
+                    <th className="py-4 px-6 text-left text-sm font-semibold text-gray-700">Department</th>
+                    <th className="py-4 px-6 text-left text-sm font-semibold text-gray-700">Status</th>
+                    <th className="py-4 px-6 text-left text-sm font-semibold text-gray-700">Attendance</th>
+                    <th className="py-4 px-6 text-left text-sm font-semibold text-gray-700">Actions</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-gray-200">
                   {faculty.map((f) => (
-                    <tr key={f.id} className="border-b">
-                      <td className="py-3 px-4">
+                    <tr key={f.id} className="hover:bg-gray-50">
+                      <td className="py-4 px-6">
                         <div>
-                          <p className="font-medium">{f.name}</p>
+                          <p className="font-medium text-gray-900">{f.name}</p>
                           <p className="text-sm text-gray-500">{f.email}</p>
                         </div>
                       </td>
-                      <td className="py-3 px-4">{f.department}</td>
-                      <td className="py-3 px-4">
-                        <Badge
-                          className={
-                            f.status === 'ACTIVE' ? 'bg-green-500' : 'bg-red-500'
-                          }
+                      <td className="py-4 px-6 text-gray-700">{f.department}</td>
+                      <td className="py-4 px-6">
+                        <Badge 
+                          className={`${
+                            f.status === 'ACTIVE' 
+                              ? 'bg-green-100 text-green-800' 
+                              : 'bg-red-100 text-red-800'
+                          } font-medium`}
                         >
                           {f.status}
                         </Badge>
                       </td>
-                      <td className="py-3 px-4">
-                        {f.lastMarked
-                          ? format(new Date(f.lastMarked), 'PPpp')
-                          : 'Never'}
+                      <td className="py-4 px-6">
+                        {f.attendanceStatus ? (
+                          <Badge 
+                            className={`${
+                              f.attendanceStatus === 'PRESENT' 
+                                ? 'bg-green-100 text-green-800' 
+                                : 'bg-red-100 text-red-800'
+                            } font-medium`}
+                          >
+                            {f.attendanceStatus}
+                          </Badge>
+                        ) : (
+                          <span className="text-gray-400">Not Marked</span>
+                        )}
                       </td>
-                      <td className="py-3 px-4">
+                      <td className="py-4 px-6">
                         <div className="flex gap-2">
-                          {!f.hasBiometric ? (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleSetupFingerprint(f)}
-                              disabled={isProcessing}
-                            >
-                              Setup Fingerprint
-                            </Button>
-                          ) : (
-                            <Button
-                              size="sm"
-                              onClick={() => handleMarkAttendance(f)}
-                              disabled={isProcessing}
-                            >
-                              Mark Attendance
-                            </Button>
-                          )}
+                          <Button
+                            size="sm"
+                            variant={f.attendanceStatus === 'PRESENT' ? 'default' : 'outline'}
+                            className={`${
+                              f.attendanceStatus === 'PRESENT' 
+                                ? 'bg-green-600 hover:bg-green-700' 
+                                : 'hover:bg-green-50'
+                            }`}
+                            onClick={() => handleManualMark(f.id, 'PRESENT')}
+                            disabled={isProcessing || f.attendanceStatus === 'PRESENT'}
+                          >
+                            Present
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant={f.attendanceStatus === 'ABSENT' ? 'destructive' : 'outline'}
+                            className={`${
+                              f.attendanceStatus === 'ABSENT' 
+                                ? 'bg-red-600 hover:bg-red-700' 
+                                : 'hover:bg-red-50'
+                            }`}
+                            onClick={() => handleManualMark(f.id, 'ABSENT')}
+                            disabled={isProcessing || f.attendanceStatus === 'ABSENT'}
+                          >
+                            Absent
+                          </Button>
                         </div>
                       </td>
                     </tr>
@@ -259,50 +201,6 @@ export default function FacultyAttendancePage() {
           )}
         </CardContent>
       </Card>
-
-      <Dialog open={isSetupOpen} onOpenChange={setIsSetupOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              Setup Fingerprint for {selectedFaculty?.name}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <p className="text-sm text-gray-500">
-              Please follow the prompts to register your fingerprint (Touch ID).
-              This will be used to mark your attendance.
-            </p>
-            <Button
-              onClick={handleRegisterFingerprint}
-              disabled={isProcessing}
-              className="w-full"
-            >
-              {isProcessing ? 'Processing...' : 'Register Fingerprint'}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
-}
-
-// Helper functions for WebAuthn
-function base64urlToUint8Array(base64url: string) {
-  const padding = '='.repeat((4 - (base64url.length % 4)) % 4);
-  const base64 = (base64url + padding).replace(/-/g, '+').replace(/_/g, '/');
-  const rawData = window.atob(base64);
-  const buffer = new Uint8Array(rawData.length);
-  for (let i = 0; i < rawData.length; ++i) {
-    buffer[i] = rawData.charCodeAt(i);
-  }
-  return buffer;
-}
-
-function arrayBufferToBase64url(buffer: ArrayBuffer) {
-  const bytes = new Uint8Array(buffer);
-  let str = '';
-  for (const charCode of bytes) {
-    str += String.fromCharCode(charCode);
-  }
-  return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 } 

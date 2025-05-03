@@ -32,20 +32,28 @@ export default function AddStudentPage() {
     e.preventDefault()
     setLoading(true)
     setShowCreds(null)
-    const rollNumber = generateRollNumber()
+
+    // Remove studentId/rollNumber from the POST body, let backend handle it
     const password = generatePassword()
     try {
-      const res = await fetch('/api/admin/students', {
+      const res = await fetch('/api/students', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, courseId: Number(form.courseId), rollNumber, password }),
+        body: JSON.stringify({
+          name: form.name,
+          email: form.email,
+          courseId: Number(form.courseId),
+          semester: form.semester,
+          password,
+          phoneNumber: form.phoneNumber
+        }),
       })
       const data = await res.json()
       if (!res.ok) {
         toast.error(data.error || data.details || 'Failed to add student')
         return
       }
-      setShowCreds({ rollNumber, password })
+      setShowCreds({ rollNumber: data.data.rollNumber, password })
       toast.success('Student added successfully!')
       setForm({ name: '', email: '', courseId: '', semester: '', rollNumber: '', password: '', phoneNumber: '' })
     } catch (err: any) {

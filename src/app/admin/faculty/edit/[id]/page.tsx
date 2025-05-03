@@ -11,7 +11,7 @@ interface Faculty {
   email: string
   department: string
   position: string
-  tokenId: string
+  employeeId: string
   status: string
 }
 
@@ -25,7 +25,7 @@ export default function EditFacultyPage({ params }: { params: { id: string } }) 
     email: '',
     department: '',
     position: '',
-    tokenId: ''
+    employeeId: ''
   })
 
   // Fetch faculty data
@@ -41,7 +41,7 @@ export default function EditFacultyPage({ params }: { params: { id: string } }) 
           email: data.email,
           department: data.department,
           position: data.position,
-          tokenId: data.tokenId
+          employeeId: data.employeeId
         })
         setLoading(false)
       } catch (err) {
@@ -92,88 +92,40 @@ export default function EditFacultyPage({ params }: { params: { id: string } }) 
   }
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Edit Faculty</h1>
-        <Button variant="outline" onClick={() => router.push('/admin/faculty')}>
-          Back to List
-        </Button>
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-8 px-4">
+      <div className="bg-white shadow-xl rounded-xl p-8 w-full max-w-xl">
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-2xl font-bold text-blue-800">Edit Faculty</h1>
+          <Button variant="outline" className="text-sm" onClick={() => router.push('/admin/faculty')}>Back to List</Button>
+        </div>
+        <hr className="mb-6" />
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Name</label>
+            <Input type="text" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} className="w-full" required />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Email</label>
+            <Input type="email" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} className="w-full" required />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Department</label>
+            <Input type="text" value={formData.department} onChange={e => setFormData({ ...formData, department: e.target.value })} className="w-full" required />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Position</label>
+            <Input type="text" value={formData.position} onChange={e => setFormData({ ...formData, position: e.target.value })} className="w-full" required />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Employee ID</label>
+            <Input type="text" value={formData.employeeId} onChange={e => setFormData({ ...formData, employeeId: e.target.value })} className="w-full" required />
+          </div>
+          <div className="flex gap-4 mt-8">
+            <Button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-2 rounded-lg shadow">Save Changes</Button>
+            <Button type="button" variant="outline" onClick={() => router.push('/admin/faculty')}>Cancel</Button>
+          </div>
+        </form>
       </div>
-
-      <form onSubmit={handleSubmit} className="max-w-2xl space-y-6">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Name
-          </label>
-          <Input
-            type="text"
-            value={formData.name}
-            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            required
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Email
-          </label>
-          <Input
-            type="email"
-            value={formData.email}
-            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-            required
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Department
-          </label>
-          <Input
-            type="text"
-            value={formData.department}
-            onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-            required
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Position
-          </label>
-          <Input
-            type="text"
-            value={formData.position}
-            onChange={(e) => setFormData({ ...formData, position: e.target.value })}
-            required
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Token ID
-          </label>
-          <Input
-            type="text"
-            value={formData.tokenId}
-            onChange={(e) => setFormData({ ...formData, tokenId: e.target.value })}
-            required
-          />
-        </div>
-
-        <div className="flex gap-4">
-          <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
-            Save Changes
-          </Button>
-          <Button 
-            type="button" 
-            variant="outline"
-            onClick={() => router.push('/admin/faculty')}
-          >
-            Cancel
-          </Button>
-        </div>
-      </form>
     </div>
   )
 } 

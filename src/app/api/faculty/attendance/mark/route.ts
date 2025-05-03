@@ -1,9 +1,55 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { format, parseISO } from 'date-fns'
 
 export async function POST(request: Request) {
   try {
-    const { facultyId, credential } = await request.json()
+    const body = await request.json();
+    const { facultyId, credential, date, status, manual } = body;
+
+    if (manual) {
+      // Manual attendance marking
+      if (!facultyId || !date || !status) {
+        return NextResponse.json(
+          { error: 'Faculty ID, date, and status are required for manual marking' },
+          { status: 400 }
+        );
+      }
+
+      // Parse and normalize the date
+      const attendanceDate = parseISO(date);
+      attendanceDate.setHours(0, 0, 0, 0);
+
+      // Check if already marked for this date
+      const existing = await prisma.facultyAttendance.findFirst({
+        where: {
+          facultyId,
+          date: attendanceDate
+        }
+      });
+
+      if (existing) {
+        return NextResponse.json({ 
+          error: 'Attendance already marked for this date',
+          existingStatus: existing.status
+        }, { status: 400 });
+      }
+
+      // Create new attendance record
+      await prisma.facultyAttendance.create({
+        data: {
+          facultyId,
+          date: attendanceDate,
+          status,
+        }
+      });
+
+      return NextResponse.json({ 
+        success: true, 
+        message: `Attendance marked as ${status}`,
+        date: format(attendanceDate, 'yyyy-MM-dd')
+      });
+    }
 
     if (!facultyId || !credential) {
       return NextResponse.json(
@@ -64,7 +110,6 @@ export async function POST(request: Request) {
       data: {
         facultyId,
         date: now,
-        time: now,
       },
     })
 

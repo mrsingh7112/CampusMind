@@ -8,11 +8,20 @@ export async function GET() {
     const faculty = await prisma.faculty.findMany({
       orderBy: { createdAt: 'desc' },
       include: {
-        courses: true,
+        courses: {
+          include: {
+            course: true
+          }
+        },
         attendance: true,
       },
     })
-    return NextResponse.json(faculty)
+    // Map courses to assignedCourses for frontend compatibility
+    const result = faculty.map(f => ({
+      ...f,
+      assignedCourses: f.courses
+    }))
+    return NextResponse.json(result)
   } catch (error) {
     console.error('Error fetching faculty:', error)
     return NextResponse.json(

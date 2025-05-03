@@ -7,7 +7,7 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const faculty = await prisma.facultyMember.findUnique({
+    const faculty = await prisma.faculty.findUnique({
       where: { id: params.id },
       include: {
         courses: {
@@ -42,15 +42,15 @@ export async function PATCH(
 ) {
   try {
     const body = await request.json()
-    const { name, email, department, position, tokenId, status } = body
+    const { name, email, department, position, employeeId, phoneNumber, status } = body
 
     // Validate required fields
-    if (!name || !email || !department || !position || !tokenId) {
+    if (!name || !email || !department || !position || !employeeId) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
     // Check if email is already taken by another faculty member
-    const existingFaculty = await prisma.facultyMember.findFirst({
+    const existingFaculty = await prisma.faculty.findFirst({
       where: {
         email,
         id: { not: params.id }
@@ -61,27 +61,16 @@ export async function PATCH(
       return NextResponse.json({ error: 'Email already exists' }, { status: 400 })
     }
 
-    // Check if tokenId is already taken by another faculty member
-    const existingToken = await prisma.facultyMember.findFirst({
-      where: {
-        tokenId,
-        id: { not: params.id }
-      }
-    })
-
-    if (existingToken) {
-      return NextResponse.json({ error: 'Token ID already exists' }, { status: 400 })
-    }
-
     // Update faculty member
-    const faculty = await prisma.facultyMember.update({
+    const faculty = await prisma.faculty.update({
       where: { id: params.id },
       data: {
         name,
         email,
         department,
         position,
-        tokenId,
+        employeeId,
+        phoneNumber,
         ...(status && { status })
       }
     })
@@ -91,7 +80,9 @@ export async function PATCH(
       data: {
         action: 'UPDATE',
         entity: 'FACULTY',
-        details: `Updated faculty member: ${name}`
+        details: `Updated faculty member: ${name}`,
+        userId: 'admin',
+        userType: 'ADMIN'
       }
     })
 
@@ -108,7 +99,7 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const faculty = await prisma.facultyMember.delete({
+    const faculty = await prisma.faculty.delete({
       where: { id: params.id }
     })
 

@@ -13,7 +13,7 @@ interface AdminSidebarProps {
 const navigation = [
   {
     name: 'Dashboard',
-    href: '/admin',
+    href: '/admin/dashboard',
     icon: (
       <svg
         className="h-6 w-6"

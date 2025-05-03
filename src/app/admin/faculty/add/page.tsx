@@ -21,9 +21,19 @@ function generatePassword() {
 }
 
 export default function AddFacultyPage() {
-  const [form, setForm] = useState({ name: '', email: '', department: '', position: '', password: '', phoneNumber: '' })
+  const [form, setForm] = useState({
+    name: '',
+    email: '',
+    department: '',
+    position: '',
+    employeeId: '',
+    password: '',
+    phoneNumber: ''
+  })
   const [loading, setLoading] = useState(false)
   const [showCreds, setShowCreds] = useState<{employeeId: string, password: string} | null>(null)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
 
   // Fetch departments
   const { data: departments, isLoading: loadingDepartments } = useSWR('/api/admin/departments', fetcher)
@@ -32,35 +42,43 @@ export default function AddFacultyPage() {
     e.preventDefault()
     setLoading(true)
     setShowCreds(null)
-    const employeeId = generateEmployeeId()
-    const password = generatePassword()
+    setError('')
+    setSuccess('')
+
+    // Auto-generate employeeId if not provided
+    let employeeId = form.employeeId
+    if (!employeeId) {
+      const year = new Date().getFullYear()
+      const randomNum = Math.floor(100 + Math.random() * 900) // 3-digit random
+      employeeId = `FAC${randomNum}-${year}`
+    }
+
     try {
-      const formData = { 
-        name: form.name,
-        email: form.email,
-        department: form.department,
-        position: form.position,
-        employeeId,
-        password,
-        phoneNumber: form.phoneNumber || undefined
-      }
       const res = await fetch('/api/admin/faculty', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          name: form.name,
+          email: form.email,
+          department: form.department,
+          position: form.position,
+          employeeId,
+          password: form.password || Math.random().toString(36).slice(-8),
+          phoneNumber: form.phoneNumber || null
+        })
       })
       const data = await res.json()
       if (!res.ok) {
         toast.error(data.error || data.details || 'Failed to add faculty')
         return
       }
-      setShowCreds({ employeeId, password })
+      setShowCreds({ employeeId, password: form.password || Math.random().toString(36).slice(-8) })
       toast.success('Faculty added successfully!')
-      setForm({ name: '', email: '', department: '', position: '', password: '', phoneNumber: '' })
+      setForm({ name: '', email: '', department: '', position: '', employeeId: '', password: '', phoneNumber: '' })
       mutate('/api/admin/faculty')
       mutate('/api/admin/faculty?new=true')
     } catch (err: any) {
-      toast.error(err.message || 'Failed to add faculty')
+      setError(err.message || 'Failed to add faculty')
     } finally {
       setLoading(false)
     }
@@ -125,6 +143,14 @@ export default function AddFacultyPage() {
             onChange={e => setForm(f => ({ ...f, phoneNumber: e.target.value }))}
           />
         </div>
+        <div>
+          <label className="block mb-1 font-semibold text-blue-800">Employee ID (optional, will be auto-generated if empty)</label>
+          <Input 
+            placeholder="Employee ID" 
+            value={form.employeeId} 
+            onChange={e => setForm(f => ({ ...f, employeeId: e.target.value }))}
+          />
+        </div>
         <Button 
           type="submit" 
           disabled={loading} 
@@ -141,6 +167,18 @@ export default function AddFacultyPage() {
           <div className="text-xs text-gray-500 mt-2">
             Please securely share these credentials with the faculty member.
           </div>
+        </div>
+      )}
+      {error && (
+        <div className="mt-4 p-4 bg-red-50 rounded border border-red-200">
+          <div className="font-semibold text-red-800 mb-2">Error:</div>
+          <div>{error}</div>
+        </div>
+      )}
+      {success && (
+        <div className="mt-4 p-4 bg-green-50 rounded border border-green-200">
+          <div className="font-semibold text-green-800 mb-2">Success:</div>
+          <div>{success}</div>
         </div>
       )}
     </div>
