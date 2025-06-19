@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import bcrypt from 'bcryptjs'
 
 export async function GET() {
   try {
@@ -11,7 +12,7 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const faculty = await prisma.user.findUnique({
+    const faculty = await prisma.faculty.findUnique({
       where: {
         id: session.user.id
       },
@@ -50,12 +51,13 @@ export async function PUT(request: Request) {
 
     const data = await request.json()
 
-    const updatedFaculty = await prisma.user.update({
+    const updatedFaculty = await prisma.faculty.update({
       where: {
         id: session.user.id
       },
       data: {
         name: data.name,
+        email: data.email,
         phone: data.phone,
         address: data.address,
         department: data.department,
@@ -66,6 +68,41 @@ export async function PUT(request: Request) {
     return NextResponse.json(updatedFaculty)
   } catch (error) {
     console.error('Error updating faculty profile:', error)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}
+
+export async function PATCH(request: Request) {
+  try {
+    const session = await getServerSession(authOptions)
+
+    if (!session || session.user.role !== 'FACULTY') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { newPassword } = await request.json()
+
+    if (!newPassword || newPassword.length < 6) {
+      return NextResponse.json({ error: 'Password must be at least 6 characters long' }, { status: 400 })
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10)
+
+    const updatedFaculty = await prisma.faculty.update({
+      where: {
+        id: session.user.id
+      },
+      data: {
+        password: hashedPassword
+      }
+    })
+
+    return NextResponse.json({ message: 'Password updated successfully' })
+  } catch (error) {
+    console.error('Error updating faculty password:', error)
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

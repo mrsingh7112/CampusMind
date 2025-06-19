@@ -71,7 +71,7 @@ export async function POST(request: Request) {
         name,
         email,
         courseId,
-        semester: parseInt(semester),
+        currentSemester: parseInt(semester),
         rollNumber,
         password: hashedPassword,
         status: 'ACTIVE'

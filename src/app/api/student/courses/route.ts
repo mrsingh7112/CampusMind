@@ -1,102 +1,56 @@
-import { NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 
-export async function GET() {
-  try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+export async function GET(req: NextRequest) {
+  const session = await getServerSession(authOptions);
 
-    // Get student's enrolled courses with faculty information
-    const enrollments = await prisma.courseEnrollment.findMany({
-      where: {
-        studentId: session.user.id,
-        status: 'ENROLLED'
-      },
-      include: {
-        course: {
-          include: {
-            faculty: {
-              select: {
-                name: true
-              }
-            },
-            assignments: true,
-            TimeTableSlot: true
-          }
-        }
-      }
-    })
-
-    // Format the response
-    const formattedCourses = enrollments.map(enrollment => ({
-      id: enrollment.course.id,
-      code: enrollment.course.code,
-      name: enrollment.course.name,
-      credits: enrollment.course.credits,
-      faculty: enrollment.course.faculty,
-      schedule: enrollment.course.TimeTableSlot,
-      assignments: enrollment.course.assignments
-    }))
-
-    return NextResponse.json(formattedCourses)
-  } catch (error) {
-    console.error('Error fetching courses:', error)
-    return NextResponse.json(
-      { error: 'Failed to fetch courses' },
-      { status: 500 }
-    )
+  if (!session || !session.user || session.user.role !== 'STUDENT') {
+    return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
   }
-}
 
-export async function POST(request: Request) {
+  const studentId = session.user.id;
+
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const student = await prisma.student.findUnique({
+      where: { id: studentId },
+      select: {
+        courseId: true,
+        currentSemester: true,
+        course: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            department: { select: { name: true } },
+            totalSemesters: true,
+            subjects: { // Fetch subjects related to the course
+              select: {
+                id: true,
+                name: true,
+                code: true,
+                semester: true,
+                credits: true,
+                type: true,
+              },
+              orderBy: { semester: 'asc' },
+            },
+          },
+        },
+      },
+    });
+
+    if (!student || !student.course) {
+      return NextResponse.json({ message: 'Student not found or not enrolled in a course' }, { status: 404 });
     }
 
-    const { courseId } = await request.json()
-    if (!courseId) {
-      return NextResponse.json(
-        { error: 'Course ID is required' },
-        { status: 400 }
-      )
-    }
-
-    // Check if student is already enrolled
-    const existingEnrollment = await prisma.courseEnrollment.findFirst({
-      where: {
-        studentId: session.user.id,
-        courseId,
-      }
-    })
-
-    if (existingEnrollment) {
-      return NextResponse.json(
-        { error: 'Already enrolled in this course' },
-        { status: 400 }
-      )
-    }
-
-    // Enroll student in the course
-    const enrollment = await prisma.courseEnrollment.create({
-      data: {
-        studentId: session.user.id,
-        courseId,
-        status: 'ENROLLED'
-      }
-    })
-
-    return NextResponse.json(enrollment)
+    return NextResponse.json({
+      course: student.course,
+      currentSemester: student.currentSemester,
+    });
   } catch (error) {
-    console.error('Error enrolling in course:', error)
-    return NextResponse.json(
-      { error: 'Failed to enroll in course' },
-      { status: 500 }
-    )
+    console.error('Error fetching student courses:', error);
+    return NextResponse.json({ message: 'Internal server error' }, { status: 500 });
   }
 } 

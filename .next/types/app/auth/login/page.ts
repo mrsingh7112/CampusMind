@@ -1,4 +1,4 @@
-// File: /Users/mr_singh_7112/Desktop/campus mind/src/app/auth/login/page.tsx
+// File: /Users/mr_singh_7112/Desktop/campus_mind_backup_4_10_30/src/app/auth/login/page.tsx
 import * as entry from '../../../../../src/app/auth/login/page.js'
 import type { ResolvingMetadata, ResolvingViewport } from 'next/dist/lib/metadata/types/metadata-interface.js'
 

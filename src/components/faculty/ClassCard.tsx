@@ -1,12 +1,17 @@
 'use client'
 
+import { format } from 'date-fns';
+import { useState } from 'react';
+
 interface Course {
   id: string
-  code: string
-  name: string
-  students: number
-  time: string
-  room: string
+  subject: { name: string, code: string } | null
+  course: { name: string } | null
+  semester: number
+  studentCount: number
+  startTime: string
+  endTime: string
+  room: { name: string, building: string, floor: number } | null
 }
 
 interface ClassCardProps {
@@ -14,107 +19,59 @@ interface ClassCardProps {
 }
 
 export default function ClassCard({ courses = [] }: ClassCardProps) {
-  const defaultCourses: Course[] = [
-    {
-      id: '1',
-      code: 'CS101',
-      name: 'Introduction to Computer Science',
-      students: 45,
-      time: '09:00 AM - 10:30 AM',
-      room: 'Room 301',
-    },
-    {
-      id: '2',
-      code: 'CS201',
-      name: 'Data Structures',
-      students: 35,
-      time: '11:00 AM - 12:30 PM',
-      room: 'Room 302',
-    },
-    {
-      id: '3',
-      code: 'CS301',
-      name: 'Database Management',
-      students: 40,
-      time: '02:00 PM - 03:30 PM',
-      room: 'Room 303',
-    },
-  ]
+  const [expanded, setExpanded] = useState(false);
+  const showCount = 2;
+  const displayCourses = expanded ? courses : courses.slice(0, showCount);
+  const today = new Date();
+  const todayStr = format(today, 'yyyy-MM-dd');
 
-  const displayCourses = courses.length > 0 ? courses : defaultCourses
+  if (!courses || courses.length === 0) {
+    return (
+      <div className="p-8 text-center text-gray-500 text-lg border border-dashed border-gray-300 rounded-xl bg-gray-50">
+        <p className="mb-2">No classes scheduled for today.</p>
+        <p className="text-sm text-gray-400">Enjoy your day!</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="overflow-hidden bg-white shadow sm:rounded-lg">
-      <div className="px-4 py-5 sm:px-6">
-        <h3 className="text-lg font-medium leading-6 text-gray-900">Your Classes</h3>
-        <p className="mt-1 max-w-2xl text-sm text-gray-500">
-          Today's schedule and class information
-        </p>
-      </div>
-      <div className="border-t border-gray-200">
-        <ul role="list" className="divide-y divide-gray-200">
-          {displayCourses.map((course) => (
-            <li key={course.id} className="px-4 py-4 sm:px-6">
-              <div className="flex items-center justify-between">
-                <div className="flex flex-col">
-                  <p className="truncate text-sm font-medium text-indigo-600">{course.code}</p>
-                  <p className="truncate text-sm text-gray-900">{course.name}</p>
-                  <div className="mt-2 flex items-center text-sm text-gray-500">
-                    <svg
-                      className="mr-1.5 h-5 w-5 flex-shrink-0 text-gray-400"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                      />
-                    </svg>
-                    {course.time}
-                  </div>
-                </div>
-                <div className="flex flex-col items-end">
-                  <div className="flex items-center space-x-2">
-                    <svg
-                      className="h-5 w-5 text-gray-400"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
-                      />
-                    </svg>
-                    <span className="text-sm text-gray-900">{course.room}</span>
-                  </div>
-                  <div className="mt-2 flex items-center space-x-2">
-                    <svg
-                      className="h-5 w-5 text-gray-400"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
-                      />
-                    </svg>
-                    <span className="text-sm text-gray-500">{course.students} Students</span>
-                  </div>
-                </div>
-              </div>
-            </li>
-          ))}
-        </ul>
-      </div>
+    <div className="space-y-6">
+      <h3 className="text-2xl font-bold text-blue-800 mb-4">Assigned Subjects</h3>
+      {displayCourses.map((slot) => (
+        <div
+          key={slot.id}
+          className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl shadow-xl p-6 flex flex-col md:flex-row md:items-center md:justify-between border border-blue-200 transition-all duration-300 ease-in-out transform hover:scale-[1.02] hover:shadow-2xl"
+        >
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center space-x-3 mb-2">
+              <span className="text-xl font-extrabold text-blue-800">{slot.subject?.name || '-'}</span>
+              <span className="text-sm bg-blue-200 text-blue-800 rounded-full px-3 py-1 font-semibold">{slot.subject?.code || '-'}</span>
+            </div>
+            <div className="text-base text-indigo-700 font-medium mb-1">{slot.course?.name || '-'} | Semester {slot.semester}</div>
+            <div className="text-sm text-gray-600 mb-1">
+              <span className="font-semibold text-gray-700">Time:</span> {slot.startTime} - {slot.endTime}
+            </div>
+            <div className="text-sm text-gray-600">
+              <span className="font-semibold text-gray-700">Room:</span> {slot.room ? `${slot.room.name} (${slot.room.building}, Floor ${slot.room.floor})` : '-'}
+            </div>
+          </div>
+          <div className="mt-5 md:mt-0 flex flex-col items-end justify-center min-w-[140px]">
+            <div className="text-lg font-bold text-white bg-blue-600 rounded-full px-4 py-2 shadow-md">
+              {slot.studentCount} Students
+            </div>
+          </div>
+        </div>
+      ))}
+      {courses.length > showCount && (
+        <div className="flex justify-center mt-4">
+          <button
+            onClick={() => setExpanded((prev) => !prev)}
+            className="px-6 py-2 rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-semibold shadow-lg hover:from-indigo-500 hover:to-blue-600 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-400"
+          >
+            {expanded ? 'Show Less' : 'Show More'}
+          </button>
+        </div>
+      )}
     </div>
-  )
+  );
 } 

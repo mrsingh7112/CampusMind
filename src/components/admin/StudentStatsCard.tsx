@@ -23,7 +23,14 @@ export default function StudentStatsCard() {
       const res = await fetch('/api/admin/student-stats')
       if (!res.ok) throw new Error('Failed to fetch student stats')
       const data = await res.json()
-      setStats(data)
+      // Transform the API response object into an array of stats
+      const statsArray: Stat[] = [
+        { label: 'Total Students', value: data.totalStudents },
+        { label: 'Active Students', value: data.activeStudents },
+        { label: 'New Enrollments (30d)', value: data.newEnrollments },
+        // Optionally add more, e.g. department/semester breakdowns
+      ]
+      setStats(statsArray)
     } catch (err) {
       setError('Failed to load student stats')
       console.error(err)

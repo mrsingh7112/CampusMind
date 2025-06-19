@@ -3,7 +3,7 @@
 import { Fragment, useState, useRef, useEffect } from 'react'
 import { Menu, Transition } from '@headlessui/react'
 import Link from 'next/link'
-import { signOut } from 'next-auth/react'
+import { signOut, useSession } from 'next-auth/react'
 import NotificationsSummary from '@/components/admin/NotificationsSummary'
 
 interface AdminHeaderProps {
@@ -14,6 +14,7 @@ export default function AdminHeader({ onMenuClick }: AdminHeaderProps) {
   const [showNotifications, setShowNotifications] = useState(false);
   const notifRef = useRef<HTMLButtonElement>(null);
   const notifDropdownRef = useRef<HTMLDivElement>(null);
+  const { data: session } = useSession();
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -105,10 +106,18 @@ export default function AdminHeader({ onMenuClick }: AdminHeaderProps) {
             <Menu as="div" className="relative">
               <Menu.Button className="flex rounded-full border-2 border-blue-200 bg-white shadow hover:shadow-lg transition-transform hover:scale-105 text-sm focus:outline-none">
                 <span className="sr-only">Open user menu</span>
-                <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-400 to-purple-400 border-2 border-white flex items-center justify-center">
-                  <svg className="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5.121 17.804A13.937 13.937 0 0112 15c2.5 0 4.847.655 6.879 1.804M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
+                <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-400 to-purple-400 border-2 border-white flex items-center justify-center overflow-hidden">
+                  {session?.user?.profilePicture ? (
+                    <img
+                      src={session.user.profilePicture}
+                      alt="Profile"
+                      className="h-10 w-10 object-cover rounded-full"
+                    />
+                  ) : (
+                    <svg className="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5.121 17.804A13.937 13.937 0 0112 15c2.5 0 4.847.655 6.879 1.804M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                  )}
                 </div>
               </Menu.Button>
 
@@ -145,7 +154,7 @@ export default function AdminHeader({ onMenuClick }: AdminHeaderProps) {
                   <Menu.Item>
                     {({ active }) => (
                       <button
-                        onClick={() => signOut()}
+                        onClick={() => signOut({ callbackUrl: '/' })}
                         className={`$${active ? 'bg-blue-50' : ''} block w-full px-5 py-2 text-left text-base text-gray-700 rounded-lg`}
                       >
                         Sign out

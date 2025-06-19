@@ -6,12 +6,19 @@ import StudentStatsCard from '@/components/admin/StudentStatsCard'
 import DepartmentStatsCard from '@/components/admin/DepartmentStatsCard'
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { UserPlus, Megaphone, Layers } from 'lucide-react'
+import { UserPlus, Megaphone, Layers, Landmark, Users, Clock, ClipboardCheck, Building2, TrendingUp, BellRing, BookOpen, GraduationCap, Calendar } from 'lucide-react'
 import { useSession } from 'next-auth/react'
 import useSWR, { mutate } from 'swr'
 import RecentActivityLogs from '@/components/admin/RecentActivityLogs'
 import DashboardCharts from '@/components/admin/DashboardCharts'
 import NotificationsSummary from '@/components/admin/NotificationsSummary'
+import clsx from 'clsx'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Progress } from '@/components/ui/progress'
+import { Separator } from '@/components/ui/separator'
+import { toast } from '@/components/ui/use-toast'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { format, parseISO } from 'date-fns'
 
 const fetcher = (url: string) => fetch(url).then(res => res.json())
 
@@ -28,7 +35,8 @@ export default function AdminDashboard() {
   })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [showAllDepartments, setShowAllDepartments] = useState(false);
+  const [visibleDepartmentsCount, setVisibleDepartmentsCount] = useState(3); // Initially show 3 departments
+  const [layout, setLayout] = useState('card')
 
   // SWR for live stats
   const { data: students = [], isLoading: loadingStudents } = useSWR('/api/admin/students', fetcher, { refreshInterval: 3000 })
@@ -74,9 +82,14 @@ export default function AdminDashboard() {
           departments: departments || [],
         }))
         setError('')
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error fetching stats:', error)
         setError('Failed to fetch dashboard statistics')
+        toast({
+          title: "Error",
+          description: error.message || "Failed to load dashboard statistics.",
+          variant: "destructive",
+        });
       } finally {
         setLoading(false)
       }
@@ -85,6 +98,13 @@ export default function AdminDashboard() {
     fetchStats()
   }, [students, faculty, newStudents, newFaculty, departments])
 
+  useEffect(() => {
+    setLayout(localStorage.getItem('layout') || 'card')
+    const onStorage = () => setLayout(localStorage.getItem('layout') || 'card')
+    window.addEventListener('storage', onStorage)
+    return () => window.removeEventListener('storage', onStorage)
+  }, [])
+
   // Filter pending requests
   const publicSignupsArray = Array.isArray(publicSignups) ? publicSignups : [];
   const pendingFaculty = publicSignupsArray.filter((s: any) => s.role === 'FACULTY')
@@ -92,209 +112,344 @@ export default function AdminDashboard() {
 
   // Approve/Reject handlers
   const handleApprove = async (id: string) => {
-    await fetch(`/api/admin/publicsignup/${id}/approve`, { method: 'POST' })
-    mutateSignups()
-    // Refresh all relevant SWR data
-    mutate('/api/admin/students')
-    mutate('/api/admin/faculty')
-    mutate('/api/admin/students?new=true')
-    mutate('/api/admin/faculty?new=true')
+    try {
+      await fetch(`/api/admin/publicsignup/${id}/approve`, { method: 'POST' })
+      mutateSignups()
+      // Refresh all relevant SWR data
+      mutate('/api/admin/students')
+      mutate('/api/admin/faculty')
+      mutate('/api/admin/students?new=true')
+      mutate('/api/admin/faculty?new=true')
+      toast({
+        title: "Request Approved",
+        description: "The signup request has been successfully approved.",
+        variant: "success",
+      });
+    } catch (error: any) {
+      console.error("Error approving request:", error);
+      toast({
+        title: "Approval Failed",
+        description: error.message || "Failed to approve the request.",
+        variant: "destructive",
+      });
+    }
   }
   const handleReject = async (id: string) => {
-    await fetch(`/api/admin/publicsignup/${id}`, { method: 'DELETE' })
-    mutateSignups()
-    // Refresh all relevant SWR data
-    mutate('/api/admin/students')
-    mutate('/api/admin/faculty')
-    mutate('/api/admin/students?new=true')
-    mutate('/api/admin/faculty?new=true')
+    try {
+      await fetch(`/api/admin/publicsignup/${id}`, { method: 'DELETE' })
+      mutateSignups()
+      // Refresh all relevant SWR data
+      mutate('/api/admin/students')
+      mutate('/api/admin/faculty')
+      mutate('/api/admin/students?new=true')
+      mutate('/api/admin/faculty?new=true')
+      toast({
+        title: "Request Rejected",
+        description: "The signup request has been successfully rejected.",
+        variant: "default",
+      });
+    } catch (error: any) {
+      console.error("Error rejecting request:", error);
+      toast({
+        title: "Rejection Failed",
+        description: error.message || "Failed to reject the request.",
+        variant: "destructive",
+      });
+    }
   }
 
+  const handleShowMoreDepartments = () => {
+    if (departments) {
+      setVisibleDepartmentsCount(prevCount => Math.min(prevCount + 3, departments.length)); // Show 3 more or all remaining
+    }
+  };
+
+  const handleShowLessDepartments = () => {
+    setVisibleDepartmentsCount(3); // Reset to initial 3 departments
+  };
+
+  const departmentsToShow = Array.isArray(departments) ? departments.slice(0, visibleDepartmentsCount) : [];
+  const hasMoreDepartments = Array.isArray(departments) && visibleDepartmentsCount < departments.length;
+
   if (loading) return (
-    <div className="flex flex-col items-center justify-center min-h-screen">
+    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
       <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-4"></div>
       <div className="text-lg text-blue-700 font-semibold">Loading dashboard...</div>
     </div>
   )
-  if (error) return <div className="text-red-500 text-center py-8">{error}</div>
+  if (error) return (
+    <Card className="max-w-md mx-auto mt-10 p-6 text-center shadow-lg border-red-200 bg-red-50">
+      <CardHeader>
+        <CardTitle className="text-red-700">Error Loading Dashboard</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p className="text-red-600">{error}</p>
+        <Button onClick={() => window.location.reload()} className="mt-4">Retry</Button>
+      </CardContent>
+    </Card>
+  )
 
   return (
-    <div className="min-h-screen flex bg-gradient-to-br from-blue-50 to-purple-50">
-      <main className="flex-1 px-6 md:px-10 lg:px-16 pt-28">
-        <div className="max-w-6xl mx-auto">
-      {/* Quick Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-8">
-            <div className="bg-gradient-to-r from-blue-500 to-blue-300 rounded-xl shadow-lg p-5 flex flex-col items-center text-white">
-              <UserPlus className="w-10 h-10 mb-2" />
-              <h3 className="text-lg font-semibold mb-1">Total Faculty</h3>
-              <p className="text-3xl font-bold mb-1">{loadingFaculty ? '-' : faculty.length}</p>
-              <p className="text-sm opacity-80">Active members</p>
-            </div>
-            <div className="bg-gradient-to-r from-green-500 to-green-300 rounded-xl shadow-lg p-5 flex flex-col items-center text-white">
-              <UserPlus className="w-10 h-10 mb-2" />
-              <h3 className="text-lg font-semibold mb-1">Total Students</h3>
-              <p className="text-3xl font-bold mb-1">{loadingStudents ? '-' : students.length}</p>
-              <p className="text-sm opacity-80">Enrolled</p>
+    <div className="min-h-screen flex bg-gray-50 p-6">
+      <main className="flex-1">
+        <div className="max-w-7xl mx-auto space-y-6">
+          <h1 className="text-3xl font-bold text-gray-900 mb-6">Admin Dashboard</h1>
+
+          {/* Quick Stats */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <Card className="bg-gradient-to-r from-blue-500 to-blue-400 text-white shadow-lg">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Faculty</CardTitle>
+                <Users className="h-5 w-5 opacity-90" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-4xl font-bold">{loadingFaculty ? '-' : faculty.length}</div>
+                <p className="text-xs opacity-90 mt-1">Active members</p>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-r from-green-500 to-green-400 text-white shadow-lg">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Students</CardTitle>
+                <Users className="h-5 w-5 opacity-90" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-4xl font-bold">{loadingStudents ? '-' : students.length}</div>
+                <p className="text-xs opacity-90 mt-1">Enrolled</p>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-r from-purple-500 to-purple-400 text-white shadow-lg">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">New Students</CardTitle>
+                <UserPlus className="h-5 w-5 opacity-90" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-4xl font-bold">{loadingNewStudents ? '-' : newStudents.length}</div>
+                <p className="text-xs opacity-90 mt-1">Recent sign-ups</p>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-r from-yellow-500 to-yellow-400 text-white shadow-lg">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">New Faculty</CardTitle>
+                <UserPlus className="h-5 w-5 opacity-90" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-4xl font-bold">{loadingNewFaculty ? '-' : newFaculty.length}</div>
+                <p className="text-xs opacity-90 mt-1">Recent joiners</p>
+              </CardContent>
+            </Card>
           </div>
-            <div className="bg-gradient-to-r from-purple-500 to-purple-300 rounded-xl shadow-lg p-5 flex flex-col items-center text-white">
-              <UserPlus className="w-10 h-10 mb-2" />
-              <h3 className="text-lg font-semibold mb-1">New Students</h3>
-              <p className="text-3xl font-bold mb-1">{loadingNewStudents ? '-' : newStudents.length}</p>
-              <p className="text-sm opacity-80">New enrollments</p>
-          </div>
-            <div className="bg-gradient-to-r from-yellow-500 to-yellow-300 rounded-xl shadow-lg p-5 flex flex-col items-center text-white">
-              <UserPlus className="w-10 h-10 mb-2" />
-              <h3 className="text-lg font-semibold mb-1">New Faculty</h3>
-              <p className="text-3xl font-bold mb-1">{loadingNewFaculty ? '-' : newFaculty.length}</p>
-              <p className="text-sm opacity-80">New faculty members</p>
-          </div>
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Approval Requests and Departments */}
-            <div className="col-span-2 space-y-8">
-              {/* Faculty Approval Requests */}
-              <div className="bg-white rounded-xl shadow p-5 border border-blue-100">
-                <div className="flex justify-between items-center mb-2">
-                  <h3 className="text-lg font-bold text-blue-700 flex items-center gap-2"><UserPlus className="w-5 h-5" /> Faculty Approval Requests</h3>
-        </div>
-        {pendingFaculty.length === 0 ? (
-                  <div className="text-gray-400">No pending faculty approvals</div>
-        ) : (
-          <ul className="space-y-2">
-            {pendingFaculty.map((f: any) => (
-              <li key={f.id} className="flex flex-col md:flex-row md:items-center md:gap-4 border-b py-2">
-                <div className="flex-1">
-                  <div className="font-bold text-blue-800">{f.name}</div>
-                  <div className="text-sm text-gray-600">{f.position} • {f.department}</div>
-                  <div className="text-xs text-gray-500">ID: {f.tokenId} • {f.email}</div>
-                </div>
-                <div className="flex gap-2 mt-2 md:mt-0">
-                          <Button size="sm" className="bg-green-500 text-white hover:bg-green-600" onClick={() => handleApprove(f.id)}>Approve</Button>
-                          <Button size="sm" className="bg-red-500 text-white hover:bg-red-600" onClick={() => handleReject(f.id)}>Reject</Button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-              {/* Student Approval Requests */}
-              <div className="bg-white rounded-xl shadow p-5 border border-green-100">
-                <div className="flex justify-between items-center mb-2">
-                  <h3 className="text-lg font-bold text-green-700 flex items-center gap-2"><UserPlus className="w-5 h-5" /> Student Approval Requests</h3>
-        </div>
-        {pendingStudents.length === 0 ? (
-                  <div className="text-gray-400">No pending student approvals</div>
-        ) : (
-          <ul className="space-y-2">
-            {pendingStudents.map((s: any) => (
-              <li key={s.id} className="flex flex-col md:flex-row md:items-center md:gap-4 border-b py-2">
-                <div className="flex-1">
-                  <div className="font-bold text-green-800">{s.name}</div>
-                  <div className="text-sm text-gray-600">{s.department} • Semester {s.semester}</div>
-                  <div className="text-xs text-gray-500">ID: {s.tokenId} • {s.email}</div>
-                </div>
-                <div className="flex gap-2 mt-2 md:mt-0">
-                          <Button size="sm" className="bg-green-500 text-white hover:bg-green-600" onClick={() => handleApprove(s.id)}>Approve</Button>
-                          <Button size="sm" className="bg-red-500 text-white hover:bg-red-600" onClick={() => handleReject(s.id)}>Reject</Button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-              {/* Student Statistics */}
-              <div className="bg-white rounded-xl shadow p-5 border border-cyan-100">
-                <div className="flex justify-between items-center mb-2">
-                  <h3 className="text-lg font-bold text-cyan-700 flex items-center gap-2"><UserPlus className="w-5 h-5" /> Student Statistics</h3>
-                  <a href="/admin/students" className="text-sm text-indigo-600 hover:text-indigo-500">View all students</a>
-                </div>
-                <StudentStatsCard />
-              </div>
-              {/* Recent Activity Logs */}
-              <RecentActivityLogs />
-            </div>
-            {/* Departments and Quick Actions */}
-            <div className="space-y-8">
-              {/* Departments */}
-              <div className="bg-white rounded-xl shadow p-5 border border-purple-100">
-                <div className="flex justify-between items-center mb-2">
-                  <h3 className="text-lg font-bold text-purple-700 flex items-center gap-2">
-                    <Megaphone className="w-5 h-5" /> Departments
-                  </h3>
-                  <a href="/admin/departments/manage" className="text-sm text-indigo-600 hover:text-indigo-500">
-                    Manage departments
-                  </a>
-                </div>
-                <ul className="space-y-1 max-h-56 overflow-y-auto transition-all">
-                  {loadingDepartments ? (
-                    <li className="animate-pulse text-gray-400">Loading...</li>
-                  ) : departments && departments.length > 0 ? (
-                    (showAllDepartments ? departments : departments.slice(0, 4)).map((dept: any) => (
-                      <li key={dept.id} className="flex items-center justify-between py-2 hover:bg-purple-50 rounded-lg transition">
-                        <div className="flex items-center gap-2">
-                          <span className="bg-gradient-to-r from-blue-100 to-purple-100 px-3 py-1 rounded-full shadow text-sm text-blue-700 font-medium flex items-center gap-1">
-                            <Layers className="w-4 h-4 text-purple-400" />
-                            {dept.name}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-gray-500">{dept.courses?.length || 0} courses</span>
-                          <span className="text-xs text-gray-400">•</span>
-                          <span className="text-xs text-gray-500">
-                            {dept.courses?.reduce((total: number, course: any) => total + (course.subjects?.length || 0), 0) || 0} subjects
-                          </span>
-                        </div>
-                      </li>
-                    ))
+
+          {/* Main Content Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            {/* Left Column */}
+            <div className="space-y-6">
+              <Card className="shadow-lg">
+                <CardHeader>
+                  <CardTitle className="text-xl font-bold text-blue-700 flex items-center gap-2">
+                    <UserPlus className="w-5 h-5" /> Approval Requests
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {pendingFaculty.length === 0 && pendingStudents.length === 0 ? (
+                    <div className="text-gray-500 text-center py-4">No pending approvals.</div>
                   ) : (
-                    <li className="text-gray-400">No departments added yet. Add departments from the Manage Departments page.</li>
+                    <div className="space-y-4">
+                      {pendingFaculty.map((f: any) => (
+                        <div key={f.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-blue-50 rounded-md border border-blue-200">
+                          <div>
+                            <p className="font-semibold text-blue-800">{f.name}</p>
+                            <p className="text-sm text-gray-700">{f.position} • {f.department}</p>
+                            <p className="text-xs text-gray-600">{f.email}</p>
+                          </div>
+                          <div className="flex gap-2 mt-3 sm:mt-0">
+                            <Button size="sm" variant="success" onClick={() => handleApprove(f.id)}>Approve</Button>
+                            <Button size="sm" variant="destructive" onClick={() => handleReject(f.id)}>Reject</Button>
+                          </div>
+                        </div>
+                      ))}
+                      {pendingStudents.map((s: any) => (
+                        <div key={s.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-green-50 rounded-md border border-green-200">
+                          <div>
+                            <p className="font-semibold text-green-800">{s.name}</p>
+                            <p className="text-sm text-gray-700">{s.courseId ? `Course: ${s.courseId}` : ''}</p>
+                            <p className="text-xs text-gray-600">{s.email}</p>
+                          </div>
+                          <div className="flex gap-2 mt-3 sm:mt-0">
+                            <Button size="sm" variant="success" onClick={() => handleApprove(s.id)}>Approve</Button>
+                            <Button size="sm" variant="destructive" onClick={() => handleReject(s.id)}>Reject</Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   )}
-                </ul>
-                {departments && departments.length > 4 && (
-                  <button
-                    className="mt-2 text-xs text-purple-600 hover:underline focus:outline-none"
-                    onClick={() => setShowAllDepartments((prev) => !prev)}
-                  >
-                    {showAllDepartments ? "Show less" : `Show all (${departments.length})`}
-                  </button>
-                )}
+                </CardContent>
+              </Card>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <Card className="shadow-lg">
+                  <CardHeader>
+                    <CardTitle className="text-xl font-bold text-orange-700 flex items-center gap-2">
+                      <ClipboardCheck className="w-5 h-5" /> Recent Results
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {stats.recentResults.length === 0 ? (
+                      <div className="text-gray-500 text-center py-4">No recent results available.</div>
+                    ) : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Subject</TableHead>
+                            <TableHead>Student</TableHead>
+                            <TableHead>Grade</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {stats.recentResults.map((result: any) => (
+                            <TableRow key={result.id} className="bg-orange-50 border-orange-200">
+                              <TableCell className="font-semibold text-orange-800">{result.subject?.code}</TableCell>
+                              <TableCell className="text-sm text-gray-700">{result.student?.name || 'N/A'}</TableCell>
+                              <TableCell className="text-sm text-gray-700">{result.grade}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card className="shadow-lg">
+                  <CardHeader>
+                    <CardTitle className="text-xl font-bold text-teal-700 flex items-center gap-2">
+                      <ClipboardCheck className="w-5 h-5" /> Recent Attendance
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {stats.recentAttendance.length === 0 ? (
+                      <div className="text-gray-500 text-center py-4">No recent attendance records.</div>
+                    ) : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Subject</TableHead>
+                            <TableHead>Student</TableHead>
+                            <TableHead>Status</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {stats.recentAttendance.map((record: any) => (
+                            <TableRow key={record.id} className="bg-teal-50 border-teal-200">
+                              <TableCell className="font-semibold text-teal-800">{record.subject?.code}</TableCell>
+                              <TableCell className="text-sm text-gray-700">{record.student?.name || 'N/A'}</TableCell>
+                              <TableCell className="text-sm text-gray-700">{record.status}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    )}
+                  </CardContent>
+                </Card>
               </div>
-              {/* Quick Actions */}
-              <div className="bg-white rounded-xl shadow p-5 border border-orange-100">
-                <h3 className="text-lg font-bold text-orange-700 mb-3 flex items-center gap-2"><UserPlus className="w-5 h-5" /> Quick Actions</h3>
-                <div className="flex flex-col gap-3">
-                  <a href="/admin/students/add" className="group">
-                    <Button className="w-full h-16 text-base flex flex-col items-center justify-center bg-gradient-to-r from-green-400 to-blue-500 text-white shadow-lg group-hover:scale-105 group-hover:from-green-500 group-hover:to-blue-600 transition-transform duration-200">
-                      <UserPlus className="w-7 h-7 mb-1" />
-              Add New Student
-            </Button>
-                  </a>
-                  <a href="/admin/faculty/add" className="group">
-                    <Button className="w-full h-16 text-base flex flex-col items-center justify-center bg-gradient-to-r from-purple-400 to-pink-500 text-white shadow-lg group-hover:scale-105 group-hover:from-purple-500 group-hover:to-pink-600 transition-transform duration-200">
-                      <UserPlus className="w-7 h-7 mb-1" />
-              Add New Faculty
-            </Button>
-                  </a>
-                  <a href="/admin/departments/add" className="group">
-                    <Button className="w-full h-16 text-base flex flex-col items-center justify-center bg-gradient-to-r from-cyan-400 to-blue-600 text-white shadow-lg group-hover:scale-105 group-hover:from-cyan-500 group-hover:to-blue-700 transition-transform duration-200">
-                      <UserPlus className="w-7 h-7 mb-1" />
-              Add Department
-            </Button>
-                  </a>
-                  <a href="/admin/announcements/add" className="group">
-                    <Button className="w-full h-16 text-base flex flex-col items-center justify-center bg-gradient-to-r from-yellow-400 to-orange-500 text-white shadow-lg group-hover:scale-105 group-hover:from-yellow-500 group-hover:to-orange-600 transition-transform duration-200">
-                      <Megaphone className="w-7 h-7 mb-1" />
-              Send Announcement
-            </Button>
-                  </a>
-                </div>
+
+              {/* Recent Activity and Notifications (Parallel) */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <Card className="shadow-lg">
+                  <CardHeader>
+                    <CardTitle className="text-xl font-bold text-orange-700 flex items-center gap-2">
+                      <Clock className="w-5 h-5" /> Recent Activity
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <RecentActivityLogs />
+                  </CardContent>
+                </Card>
+
+                <Card className="shadow-lg">
+                  <CardHeader>
+                    <CardTitle className="text-xl font-bold text-red-700 flex items-center gap-2">
+                      <BellRing className="w-5 h-5" /> Notifications
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <NotificationsSummary />
+                  </CardContent>
+                </Card>
               </div>
-              {/* Graphs/Charts */}
-              <DashboardCharts />
+            </div>
+
+            {/* Right Column */}
+            <div className="space-y-6">
+              <Card className="shadow-lg">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0">
+                  <CardTitle className="text-xl font-bold text-indigo-700 flex items-center gap-2">
+                    <Building2 className="w-5 h-5" /> Departments
+                  </CardTitle>
+                  <div className="flex gap-2">
+                    {visibleDepartmentsCount > 3 && (
+                      <Button
+                        variant="outline"
+                        onClick={handleShowLessDepartments}
+                        className="text-sm"
+                      >
+                        Show Less
+                      </Button>
+                    )}
+                    {hasMoreDepartments && (
+                      <Button
+                        variant="outline"
+                        onClick={handleShowMoreDepartments}
+                        className="text-sm"
+                      >
+                        Show More
+                      </Button>
+                    )}
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {loadingDepartments ? (
+                    <div className="text-center py-4 text-gray-500">Loading departments...</div>
+                  ) : (Array.isArray(departments) && departments.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {departmentsToShow.map((dept: any) => (
+                        <div key={dept.id} className="p-4 border rounded-lg bg-gray-50">
+                          <h3 className="font-semibold text-lg text-gray-800">{dept.name}</h3>
+                          <p className="text-sm text-gray-600">
+                            Courses: {dept._count?.courses || 0} • Faculty: {dept._count?.faculty || 0} • Students: {dept._count?.students || 0}
+                          </p>
+                          {dept.courses && dept.courses.length > 0 && (
+                            <div className="mt-2 text-xs text-gray-500">
+                              <span className="font-medium">Top Courses:</span> {
+                                dept.courses.slice(0, 2).map((course: any) => course.name).join(', ')
+                              }
+                              {dept.courses.length > 2 && '...'}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-4 text-gray-500">No departments found.</div>
+                  ))}
+                </CardContent>
+              </Card>
+
+              <Card className="shadow-lg">
+                <CardHeader>
+                  <CardTitle className="text-xl font-bold text-purple-700 flex items-center gap-2">
+                    <TrendingUp className="w-5 h-5" /> Insights
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <DashboardCharts />
+                </CardContent>
+              </Card>
             </div>
           </div>
         </div>
       </main>
     </div>
-  )
+  );
 } 

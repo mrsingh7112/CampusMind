@@ -27,12 +27,12 @@ import { signOut } from 'next-auth/react'
 
 const navigation = [
   { name: 'Dashboard', href: '/faculty/dashboard', icon: LayoutDashboard },
-  { name: 'Classes', href: '/faculty/classes', icon: BookOpen },
-  { name: 'Students', href: '/faculty/students', icon: Users },
+  { name: 'My Classes', href: '/faculty/classes', icon: BookOpen },
   { name: 'Attendance', href: '/faculty/attendance', icon: ClipboardList },
   { name: 'Assignments', href: '/faculty/assignments', icon: GraduationCap },
   { name: 'Schedule', href: '/faculty/schedule', icon: Calendar },
   { name: 'Notifications', href: '/faculty/notifications', icon: Bell },
+  { name: 'Profile', href: '/faculty/profile', icon: User },
   { name: 'Settings', href: '/faculty/settings', icon: Settings },
 ]
 

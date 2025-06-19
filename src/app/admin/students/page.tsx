@@ -7,6 +7,7 @@ import { format } from 'date-fns'
 import { UserIcon, MailIcon, BookOpenIcon, GraduationCapIcon, CheckCircleIcon, XCircleIcon, SearchIcon, PlusIcon, EditIcon, TrashIcon, BanIcon, RefreshCwIcon, AlertTriangleIcon } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useRouter } from 'next/navigation'
 
 interface Student {
   id: string
@@ -27,6 +28,7 @@ interface Student {
   }
   deactivatedFrom?: string
   deactivatedTo?: string
+  currentSemester?: number
 }
 
 interface Course {
@@ -74,6 +76,9 @@ export default function AdminStudentsPage() {
   const [deactivateFrom, setDeactivateFrom] = useState('')
   const [deactivateTo, setDeactivateTo] = useState('')
   const [deactivateLoading, setDeactivateLoading] = useState(false)
+  const [sortField, setSortField] = useState<'semester' | 'department' | 'course' | ''>('');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const router = useRouter();
 
   // Function to calculate dashboard statistics
   const calculateStats = (studentList: Student[]) => {
@@ -87,7 +92,8 @@ export default function AdminStudentsPage() {
     studentList.forEach(s => {
       const deptName = s.course?.department?.name || 'Unknown'
       stats.departmentCounts[deptName] = (stats.departmentCounts[deptName] || 0) + 1
-      stats.semesterCounts[s.semester] = (stats.semesterCounts[s.semester] || 0) + 1
+      const semester = s.currentSemester || s.semester;
+      stats.semesterCounts[semester] = (stats.semesterCounts[semester] || 0) + 1
     })
 
     setStats(stats)
@@ -206,11 +212,21 @@ export default function AdminStudentsPage() {
           deactivatedTo: deactivateTo
         })
       })
-      if (!res.ok) throw new Error('Failed to deactivate student')
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to deactivate student')
+      
+      if (data.permanentlyDeactivated) {
+        setSuccess('Student permanently deactivated and removed from the system')
+      } else if (data.rusticated) {
+        setSuccess('Student rusticated and removed from the system after 3 deactivations')
+      } else {
+        setSuccess('Student deactivated successfully')
+      }
+      
       fetchData()
       setDeactivateModal({ open: false, student: null })
-    } catch (err) {
-      alert('Failed to deactivate student')
+    } catch (err: any) {
+      setError(err.message || 'Failed to deactivate student')
     } finally {
       setDeactivateLoading(false)
     }
@@ -238,6 +254,25 @@ export default function AdminStudentsPage() {
     s.email.toLowerCase().includes(search.toLowerCase()) ||
     s.rollNumber.toLowerCase().includes(search.toLowerCase())
   )
+
+  // Sorting logic
+  const sortedStudents = [...filteredStudents].sort((a, b) => {
+    if (!sortField) return 0;
+    let aValue, bValue;
+    if (sortField === 'semester') {
+      aValue = a.currentSemester || a.semester || 0;
+      bValue = b.currentSemester || b.semester || 0;
+    } else if (sortField === 'department') {
+      aValue = a.course?.department?.name || '';
+      bValue = b.course?.department?.name || '';
+    } else if (sortField === 'course') {
+      aValue = a.course?.name || '';
+      bValue = b.course?.name || '';
+    }
+    if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
+    if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
+    return 0;
+  });
 
   return (
     <div className="space-y-6 p-6">
@@ -283,6 +318,26 @@ export default function AdminStudentsPage() {
             onChange={e => setSearch(e.target.value)}
             className="pl-10 pr-4 py-2 rounded-lg border border-gray-200 shadow-sm focus:ring-2 focus:ring-blue-400"
           />
+        </div>
+        <div className="flex gap-2 items-center">
+          <label className="font-semibold text-gray-700">Sort by:</label>
+          <select
+            className="border rounded px-2 py-1"
+            value={sortField}
+            onChange={e => setSortField(e.target.value as any)}
+          >
+            <option value="">None</option>
+            <option value="semester">Semester</option>
+            <option value="department">Department</option>
+            <option value="course">Course</option>
+          </select>
+          <button
+            className="ml-2 px-2 py-1 border rounded bg-gray-50 hover:bg-gray-100"
+            onClick={() => setSortDirection(d => d === 'asc' ? 'desc' : 'asc')}
+            title="Toggle sort direction"
+          >
+            {sortDirection === 'asc' ? '↑' : '↓'}
+          </button>
         </div>
         <Button className="flex items-center gap-2 px-6 py-2 rounded-lg text-base font-semibold" onClick={() => setShowAdd(true)}>
           <PlusIcon className="w-5 h-5" /> Add Student
@@ -371,8 +426,12 @@ export default function AdminStudentsPage() {
               <div>Actions</div>
             </div>
             <div className="divide-y">
-              {filteredStudents.map(student => (
-                <div key={student.id} className="grid grid-cols-9 gap-4 p-4 items-center hover:bg-gray-50">
+              {sortedStudents.map(student => (
+                <div
+                  key={student.id}
+                  className="grid grid-cols-9 gap-4 p-4 items-center hover:bg-blue-50 cursor-pointer transition"
+                  onClick={() => router.push(`/admin/students/${student.id}`)}
+                >
                   {/* Avatar with initials */}
                   <div className="flex items-center gap-3">
                     <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center font-bold text-blue-700 text-lg">
@@ -393,7 +452,7 @@ export default function AdminStudentsPage() {
                   </div>
                   <div>
                     <span className="px-2 py-1 rounded-full bg-orange-100 text-orange-700 text-xs font-semibold">
-                      {student.semester}
+                      {student.currentSemester || student.semester}
                     </span>
                   </div>
                   <div>
@@ -425,7 +484,7 @@ export default function AdminStudentsPage() {
                       </div>
                     )}
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2" onClick={e => e.stopPropagation()}>
                     {student.status === 'ACTIVE' ? (
                       <button
                         className="flex items-center gap-1 px-3 py-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 font-semibold text-sm transition"

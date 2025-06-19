@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { hash } from 'bcryptjs'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 
 // GET endpoint to fetch faculty
 export async function GET() {
@@ -8,18 +10,34 @@ export async function GET() {
     const faculty = await prisma.faculty.findMany({
       orderBy: { createdAt: 'desc' },
       include: {
+        department: true,
         courses: {
           include: {
             course: true
           }
         },
         attendance: true,
+        facultySubjects: {
+          include: {
+            subject: {
+              include: { course: true }
+            }
+          }
+        }
       },
     })
-    // Map courses to assignedCourses for frontend compatibility
+    // Map courses to assignedCourses and subjects to assignedSubjects for frontend compatibility
     const result = faculty.map(f => ({
       ...f,
-      assignedCourses: f.courses
+      assignedCourses: f.courses,
+      assignedSubjects: f.facultySubjects.map(fs => ({
+        id: fs.subject.id,
+        name: fs.subject.name,
+        code: fs.subject.code,
+        semester: fs.subject.semester,
+        course: fs.subject.course,
+        assignedAt: fs.assignedAt
+      }))
     }))
     return NextResponse.json(result)
   } catch (error) {
@@ -33,6 +51,11 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session || session.user.role !== 'ADMIN' || !(session.user as any).isSuperAdmin) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const data = await request.json()
     const { name, email, department, position, employeeId, password, phoneNumber } = data
 
@@ -66,6 +89,18 @@ export async function POST(request: Request) {
       )
     }
 
+    // Find department by name
+    const departmentRecord = await prisma.department.findFirst({
+      where: { name: department }
+    })
+
+    if (!departmentRecord) {
+      return NextResponse.json(
+        { error: 'Department not found' },
+        { status: 400 }
+      )
+    }
+
     // Hash password
     const hashedPassword = await hash(password, 10)
 
@@ -73,12 +108,15 @@ export async function POST(request: Request) {
       data: {
         name,
         email,
-        department,
+        departmentId: departmentRecord.id,
         position,
         employeeId,
         password: hashedPassword,
         phoneNumber: phoneNumber || null,
         status: 'ACTIVE',
+      },
+      include: {
+        department: true
       }
     })
 
@@ -95,6 +133,11 @@ export async function POST(request: Request) {
 // PATCH endpoint to update faculty status
 export async function PATCH(request: Request) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session || session.user.role !== 'ADMIN' || !(session.user as any).isSuperAdmin) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const data = await request.json()
     const { id, status } = data
 
@@ -122,6 +165,11 @@ export async function PATCH(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session || session.user.role !== 'ADMIN' || !(session.user as any).isSuperAdmin) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url)
     const id = searchParams.get('id')
 

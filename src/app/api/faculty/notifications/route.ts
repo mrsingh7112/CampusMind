@@ -17,7 +17,8 @@ export async function GET(request: Request) {
     // Get all notifications for this faculty
     const notifications = await prisma.notification.findMany({
       where: {
-        facultyId
+        recipientId: facultyId,
+        recipientType: 'FACULTY',
       },
       orderBy: {
         createdAt: 'desc'

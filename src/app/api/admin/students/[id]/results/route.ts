@@ -1,17 +1,18 @@
-import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { NextResponse } from 'next/server'
 
 export async function GET(
   request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
+    if (!prisma) throw new Error('Prisma client is not initialized')
     const results = await prisma.result.findMany({
       where: { studentId: params.id },
       include: { course: { select: { name: true } } },
       orderBy: { createdAt: 'desc' },
     })
-    return NextResponse.json(results)
+    return NextResponse.json(Array.isArray(results) ? results : [])
   } catch (error) {
     console.error('Error fetching results:', error)
     return NextResponse.json(

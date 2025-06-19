@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "Subject" ADD COLUMN     "type" TEXT NOT NULL DEFAULT 'LECTURE';

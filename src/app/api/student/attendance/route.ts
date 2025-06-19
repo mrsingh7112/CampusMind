@@ -1,96 +1,87 @@
-import { NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
-import { getServerSession } from 'next-auth'
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+import { startOfMonth, endOfMonth, format } from 'date-fns';
 
-// Simple ML model for attendance prediction
-function predictAttendance(historicalData: number[]): number {
-  // Using a simple moving average with trend
-  const recentAttendance = historicalData.slice(-3)
-  const average = recentAttendance.reduce((a, b) => a + b, 0) / recentAttendance.length
-  const trend = (recentAttendance[recentAttendance.length - 1] - recentAttendance[0]) / 2
-  
-  let prediction = average + trend
-  // Ensure prediction stays within reasonable bounds
-  prediction = Math.min(Math.max(prediction, 0), 100)
-  
-  return prediction
-}
+export async function GET(req: NextRequest) {
+  const session = await getServerSession(authOptions);
 
-export async function GET() {
+  if (!session || !session.user || session.user.role !== 'STUDENT') {
+    return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
+  }
+
+  const studentId = session.user.id;
+  const { searchParams } = new URL(req.url);
+  const monthParam = searchParams.get('month'); // YYYY-MM format
+  const yearParam = searchParams.get('year'); // YYYY format
+
+  let startDate: Date;
+  let endDate: Date;
+
+  if (monthParam && yearParam) {
+    const date = new Date(parseInt(yearParam), parseInt(monthParam) - 1, 1);
+    startDate = startOfMonth(date);
+    endDate = endOfMonth(date);
+  } else {
+    // Default to current month if no month/year specified
+    startDate = startOfMonth(new Date());
+    endDate = endOfMonth(new Date());
+  }
+
   try {
-    const session = await getServerSession()
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    // Get student's attendance records
-    const attendanceRecords = await prisma.attendance.findMany({
+    const totalAttendanceRecords = await prisma.studentAttendance.count({
       where: {
-        studentId: session.user.id,
+        studentId: studentId,
+        date: {
+          gte: startDate,
+          lte: endDate,
+        },
+      },
+    });
+
+    const presentAttendanceRecords = await prisma.studentAttendance.count({
+      where: {
+        studentId: studentId,
+        status: 'PRESENT',
+        date: {
+          gte: startDate,
+          lte: endDate,
+        },
+      },
+    });
+
+    const attendanceRecords = await prisma.studentAttendance.findMany({
+      where: {
+        studentId: studentId,
+        date: {
+          gte: startDate,
+          lte: endDate,
+        },
+      },
+      include: {
+        subject: { select: { name: true, code: true } },
       },
       orderBy: {
         date: 'desc',
       },
-    })
+    });
 
-    // Calculate attendance statistics
-    const total = attendanceRecords.length
-    const present = attendanceRecords.filter(record => record.isPresent).length
-    const absent = total - present
-    const late = attendanceRecords.filter(record => record.isPresent && record.date > record.updatedAt).length
-
-    // Calculate overall attendance percentage
-    const overall = total > 0 ? (present / total) * 100 : 0
-
-    // Get previous attendance pattern (last 10 records)
-    const previousAttendance = attendanceRecords
-      .slice(0, 10)
-      .map(record => record.isPresent ? 100 : 0)
+    const percentage = totalAttendanceRecords > 0
+      ? (presentAttendanceRecords / totalAttendanceRecords) * 100
+      : 0;
 
     return NextResponse.json({
-      overall: Math.round(overall * 10) / 10,
-      present,
-      absent,
-      late,
-      previousAttendance,
-      records: attendanceRecords
-    })
-  } catch (error) {
-    console.error('Error fetching attendance:', error)
-    return NextResponse.json(
-      { error: 'Failed to fetch attendance data' },
-      { status: 500 }
-    )
-  }
-}
-
-export async function POST(request: Request) {
-  try {
-    const session = await getServerSession()
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const { date, isPresent, classId, subjectId } = await request.json()
-
-    // Create new attendance record
-    const attendance = await prisma.attendance.create({
-      data: {
-        date: new Date(date),
-        isPresent,
-        studentId: session.user.id,
-        classId,
-        subjectId,
-        facultyId: '', // This should be set by the faculty marking attendance
+      stats: {
+        totalClasses: totalAttendanceRecords,
+        attendedClasses: presentAttendanceRecords,
+        percentage: parseFloat(percentage.toFixed(2)),
+        month: format(startDate, 'yyyy-MM'),
       },
-    })
-
-    return NextResponse.json(attendance)
+      records: attendanceRecords,
+    });
   } catch (error) {
-    console.error('Error recording attendance:', error)
-    return NextResponse.json(
-      { error: 'Failed to record attendance' },
-      { status: 500 }
-    )
+    console.error('Error fetching student attendance:', error);
+    return NextResponse.json({ message: 'Internal server error' }, { status: 500 });
   }
 } 

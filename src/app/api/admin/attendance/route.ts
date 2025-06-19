@@ -3,9 +3,13 @@ import { prisma } from '@/lib/prisma'
 
 export async function GET() {
   try {
-    const attendance = await prisma.facultyAttendance.findMany({
-      orderBy: { createdAt: 'desc' },
-      take: 10,
+    const attendance = await prisma.studentAttendance.findMany({
+      orderBy: { date: 'desc' },
+      take: 5,
+      include: {
+        student: { select: { id: true, name: true } },
+        subject: { select: { id: true, name: true, code: true } },
+      },
     })
     return NextResponse.json(attendance)
   } catch (error) {

@@ -4,13 +4,30 @@ import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useRouter } from 'next/navigation'
-import { Edit2, Bell, Ban, Layers } from 'lucide-react'
+import { Edit2, Bell, Ban, Layers, Search, PlusCircle, Trash2, Mail, Users, BookOpen, UserCheck, UserX, Info, ListFilter } from 'lucide-react'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
+import { toast } from '@/components/ui/use-toast'
+import { Badge } from '@/components/ui/badge'
+
+interface AssignedSubject {
+  id: number;
+  name: string;
+  code: string;
+  semester: number;
+  course: { id: number; name: string; code: string; createdAt?: string; updatedAt?: string; status?: string; };
+  assignedAt: string;
+}
 
 interface Faculty {
   id: string
   name: string
   email: string
-  department: string
+  department: { id?: string; name: string; code?: string; createdAt?: string; updatedAt?: string; status?: string; }
   position: string
   employeeId: string
   status: string
@@ -19,8 +36,12 @@ interface Faculty {
       id: number
       name: string
       code: string
+      createdAt?: string;
+      updatedAt?: string;
+      status?: string;
     }
   }[]
+  assignedSubjects?: AssignedSubject[]
 }
 
 interface Course {
@@ -28,6 +49,9 @@ interface Course {
   name: string
   code: string
   departmentId: number
+  createdAt?: string;
+  updatedAt?: string;
+  status?: string;
 }
 
 export default function AdminFacultyPage() {
@@ -45,6 +69,13 @@ export default function AdminFacultyPage() {
   const [notificationMessage, setNotificationMessage] = useState('')
   const [assignLoading, setAssignLoading] = useState(false)
   const [selectedSemester, setSelectedSemester] = useState('')
+  const [showSubjectsModal, setShowSubjectsModal] = useState(false)
+  const [subjectsLoading, setSubjectsLoading] = useState(false)
+  const [availableSubjects, setAvailableSubjects] = useState<AssignedSubject[]>([])
+  const [selectedSubjects, setSelectedSubjects] = useState<number[]>([])
+  const [subjectsError, setSubjectsError] = useState('')
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterStatus, setFilterStatus] = useState('ALL');
   const router = useRouter()
 
   // Fetch faculty data with courses
@@ -55,9 +86,14 @@ export default function AdminFacultyPage() {
       const data = await res.json()
       setFaculty(data)
       setLoading(false)
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error fetching faculty:', err)
       setError('Failed to load faculty data')
+      toast({
+        title: "Error",
+        description: err.message || "Failed to load faculty data.",
+        variant: "destructive",
+      });
       setLoading(false)
     }
   }
@@ -69,9 +105,14 @@ export default function AdminFacultyPage() {
       if (!res.ok) throw new Error('Failed to fetch courses')
       const data = await res.json()
       setCourses(data)
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error fetching courses:', err)
       setError('Failed to load courses')
+      toast({
+        title: "Error",
+        description: err.message || "Failed to load courses.",
+        variant: "destructive",
+      });
     }
   }
 
@@ -85,16 +126,28 @@ export default function AdminFacultyPage() {
 
   // Handle faculty removal
   const handleRemove = async (id: string) => {
-    if (!confirm('Are you sure you want to remove this faculty member?')) return
     try {
       const res = await fetch(`/api/admin/faculty/${id}`, {
         method: 'DELETE'
       })
-      if (!res.ok) throw new Error('Failed to remove faculty member')
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || 'Failed to remove faculty member');
+      }
+      toast({
+        title: "Faculty Removed!",
+        description: "Faculty member has been successfully removed.",
+        variant: "success",
+      });
       fetchData()
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error removing faculty:', err)
-      setError('Failed to remove faculty member')
+      setError(err.message || 'Failed to remove faculty member')
+      toast({
+        title: "Error",
+        description: err.message || "Failed to remove faculty member.",
+        variant: "destructive",
+      });
     }
   }
 
@@ -106,19 +159,36 @@ export default function AdminFacultyPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, status: newStatus })
       })
-      if (!res.ok) throw new Error('Failed to update status')
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || 'Failed to update status');
+      }
+      toast({
+        title: "Status Updated!",
+        description: "Faculty status has been successfully updated.",
+        variant: "success",
+      });
       fetchData()
       setShowDetailsModal(false)
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error updating status:', err)
-      setError('Failed to update status')
+      setError(err.message || 'Failed to update status')
+      toast({
+        title: "Error",
+        description: err.message || "Failed to update status.",
+        variant: "destructive",
+      });
     }
   }
 
   // Handle course assignment
   const handleAssignCourse = async () => {
     if (!selectedFaculty || !selectedCourse || !selectedSemester) {
-      setError('Please select a course and semester')
+      toast({
+        title: "Missing Information",
+        description: "Please select a course and semester to assign.",
+        variant: "destructive",
+      });
       return
     }
 
@@ -143,7 +213,11 @@ export default function AdminFacultyPage() {
         throw new Error(data.error || 'Failed to assign course')
       }
 
-      setSuccess(`Successfully assigned ${data.data.courseName} to ${data.data.facultyName}`)
+      toast({
+        title: "Course Assigned!",
+        description: `Successfully assigned ${data.data.courseName} to ${data.data.facultyName}.`,
+        variant: "success",
+      });
       fetchData() // Refresh data immediately
       setShowAssignModal(false)
       setSelectedCourse('')
@@ -151,6 +225,11 @@ export default function AdminFacultyPage() {
     } catch (err: any) {
       console.error('Error assigning course:', err)
       setError(err.message || 'Failed to assign course')
+      toast({
+        title: "Error",
+        description: err.message || "Failed to assign course.",
+        variant: "destructive",
+      });
     } finally {
       setAssignLoading(false)
     }
@@ -158,7 +237,14 @@ export default function AdminFacultyPage() {
 
   // Handle sending notification
   const handleSendNotification = async () => {
-    if (!selectedFaculty || !notificationTitle || !notificationMessage) return
+    if (!selectedFaculty || !notificationTitle || !notificationMessage) {
+      toast({
+        title: "Missing Information",
+        description: "Please fill in both title and message for the notification.",
+        variant: "destructive",
+      });
+      return;
+    }
     try {
       const res = await fetch('/api/faculty/send-notification', {
         method: 'POST',
@@ -169,280 +255,444 @@ export default function AdminFacultyPage() {
           message: notificationMessage
         })
       })
-      if (!res.ok) throw new Error('Failed to send notification')
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || 'Failed to send notification');
+      }
+      toast({
+        title: "Notification Sent!",
+        description: "Notification has been successfully sent.",
+        variant: "success",
+      });
       setShowNotificationModal(false)
       setNotificationTitle('')
       setNotificationMessage('')
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error sending notification:', err)
-      setError('Failed to send notification')
+      setError(err.message || 'Failed to send notification')
+      toast({
+        title: "Error",
+        description: err.message || "Failed to send notification.",
+        variant: "destructive",
+      });
     }
   }
 
-  return (
-    <div className="container mx-auto py-8 px-4">
-      <div className="bg-white shadow-lg rounded-xl p-6">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">Faculty Management</h1>
-          <Button className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-2 rounded-lg shadow" onClick={() => window.location.href = '/admin/faculty/add'}>Add Faculty</Button>
-        </div>
-        <div className="overflow-x-auto rounded-lg border border-gray-200">
-          <table className="w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="py-4 px-6 text-left text-sm font-bold text-gray-700">Name</th>
-                <th className="py-4 px-6 text-left text-sm font-bold text-gray-700">Email</th>
-                <th className="py-4 px-6 text-left text-sm font-bold text-gray-700">Department</th>
-                <th className="py-4 px-6 text-left text-sm font-bold text-gray-700">Position</th>
-                <th className="py-4 px-6 text-left text-sm font-bold text-gray-700">Employee ID</th>
-                <th className="py-4 px-6 text-left text-sm font-bold text-gray-700">Status</th>
-                <th className="py-4 px-6 text-left text-sm font-bold text-gray-700">Assigned Courses</th>
-                <th className="py-4 px-6 text-left text-sm font-bold text-gray-700">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {faculty.map((member) => (
-                <tr
-                  key={member.id}
-                  className="hover:bg-blue-50 transition cursor-pointer group"
-                  tabIndex={0}
-                  onClick={e => {
-                    // Prevent opening modal if clicking on an action button
-                    if ((e.target as HTMLElement).closest('button')) return;
-                    setSelectedFaculty(member);
-                    setShowDetailsModal(true);
-                  }}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      setSelectedFaculty(member);
-                      setShowDetailsModal(true);
-                    }
-                  }}
-                >
-                  <td className="py-4 px-6 font-semibold text-blue-800 group-hover:underline">{member.name}</td>
-                  <td className="py-4 px-6 text-gray-700">{member.email}</td>
-                  <td className="py-4 px-6">
-                    <span className="inline-block bg-blue-100 text-blue-800 text-xs font-semibold px-3 py-1 rounded-full">
-                      {member.department}
-                    </span>
-                  </td>
-                  <td className="py-4 px-6 text-gray-700">{member.position}</td>
-                  <td className="py-4 px-6">
-                    <span className="inline-block bg-purple-100 text-purple-700 text-xs font-mono px-3 py-1 rounded-full">
-                      {member.employeeId}
-                    </span>
-                  </td>
-                  <td className="py-4 px-6">
-                    <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold ${member.status === 'ACTIVE' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                      {member.status}
-                    </span>
-                  </td>
-                  <td className="py-4 px-6">
-                    {member.assignedCourses && member.assignedCourses.length > 0 ? (
-                      <div className="flex flex-wrap gap-1">
-                        {member.assignedCourses.map((ac, idx) => (
-                          <span key={idx} className="inline-block bg-indigo-100 text-indigo-700 text-xs px-2 py-0.5 rounded-full">
-                            {ac.course.name}
-                          </span>
-                        ))}
-                      </div>
-                    ) : (
-                      <span className="text-gray-400 text-xs">None</span>
-                    )}
-                  </td>
-                  <td className="py-4 px-6">
-                    <div className="flex gap-2">
-                      <Button size="icon" variant="outline" className="hover:bg-blue-100" title="Edit" onClick={e => { e.stopPropagation(); router.push(`/admin/faculty/edit/${member.id}`); }}>
-                        <Edit2 className="w-4 h-4 text-blue-600" />
-                      </Button>
-                      <Button size="icon" variant="outline" className="hover:bg-gray-100" title="Details" onClick={e => { e.stopPropagation(); setSelectedFaculty(member); setShowDetailsModal(true); }}>
-                        <Layers className="w-4 h-4 text-gray-600" />
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+  // Fetch assigned subjects for a faculty
+  const fetchAssignedSubjects = async (facultyId: string, assignedCourses: any[]) => {
+    setSubjectsLoading(true)
+    setSubjectsError('')
+    try {
+      const res = await fetch(`/api/admin/faculty/${facultyId}/subjects`);
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || 'Failed to fetch available subjects');
+      }
+      const data = await res.json();
+      setAvailableSubjects(data.map((subject: any) => ({ ...subject, id: Number(subject.id) })));
+      setSelectedSubjects(assignedCourses.flatMap((ac: any) => ac.course.subjects?.map((s: any) => Number(s.id)) || [])); // Pre-select already assigned subjects (if any)
+    } catch (err: any) {
+      console.error('Error fetching subjects:', err);
+      setSubjectsError(err.message || 'Failed to load available subjects.');
+      toast({
+        title: "Error",
+        description: err.message || "Failed to load available subjects.",
+        variant: "destructive",
+      });
+    } finally {
+      setSubjectsLoading(false);
+    }
+  };
 
-      {/* Faculty Details Modal */}
-      {showDetailsModal && selectedFaculty && (
-        <div className="fixed inset-0 flex items-center justify-center z-50 bg-black/30">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 relative">
-            <button className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl font-bold" onClick={() => setShowDetailsModal(false)}>
-              &times;
-            </button>
-            <h2 className="text-2xl font-bold text-blue-700 mb-4 flex items-center gap-2">
-              Faculty Details
-            </h2>
-            <div className="space-y-2">
-              <div><span className="font-semibold">Name:</span> {selectedFaculty.name}</div>
-              <div><span className="font-semibold">Email:</span> {selectedFaculty.email}</div>
-              <div>
-                <span className="font-semibold">Department:</span>
-                <span className="ml-2 px-2 py-0.5 rounded bg-blue-100 text-blue-700 text-xs">{selectedFaculty.department}</span>
+  const handleSubjectSelection = (subjectId: number, isSelected: boolean) => {
+    setSelectedSubjects(prev =>
+      isSelected ? [...prev, subjectId] : prev.filter(id => id !== subjectId)
+    );
+  };
+
+  const handleSaveSubjects = async () => {
+    if (!selectedFaculty) return;
+    try {
+      const res = await fetch(`/api/admin/faculty/${selectedFaculty.id}/subjects`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subjectIds: selectedSubjects }),
+      });
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || 'Failed to update assigned subjects');
+      }
+      toast({
+        title: "Subjects Updated!",
+        description: "Faculty's assigned subjects have been updated.",
+        variant: "success",
+      });
+      setShowSubjectsModal(false);
+      fetchData(); // Refresh faculty data to reflect new subject assignments
+    } catch (err: any) {
+      console.error('Error saving subjects:', err);
+      toast({
+        title: "Error",
+        description: err.message || "Failed to update assigned subjects.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const filteredFaculty = faculty.filter(f =>
+    (f.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      f.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      f.employeeId.toLowerCase().includes(searchQuery.toLowerCase())) &&
+    (filterStatus === 'ALL' || f.status === filterStatus.toUpperCase())
+  );
+
+  const getStatusBadgeVariant = (status: string) => {
+    switch (status) {
+      case 'ACTIVE': return 'default';
+      case 'INACTIVE': return 'secondary';
+      case 'DEACTIVATED': return 'destructive';
+      default: return 'outline';
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-100 p-6">
+      <div className="max-w-7xl mx-auto space-y-8">
+        <h1 className="text-4xl font-extrabold text-gray-900 mb-6 flex items-center gap-3">
+          <Users className="w-8 h-8 text-blue-600" /> Manage Faculty
+        </h1>
+
+        <Card className="shadow-lg">
+          <CardHeader className="flex-row items-center justify-between space-y-0">
+            <CardTitle className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+              <Users className="w-6 h-6" /> Faculty List
+            </CardTitle>
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                <Input
+                  type="text"
+                  placeholder="Search faculty..."
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  className="pl-9 pr-4 py-2 w-64"
+                />
               </div>
-              <div><span className="font-semibold">Position:</span> {selectedFaculty.position}</div>
-              <div>
-                <span className="font-semibold">Employee ID:</span>
-                <span className="ml-2 px-2 py-0.5 rounded bg-purple-100 text-purple-700 text-xs">{selectedFaculty.employeeId}</span>
+              <Select onValueChange={setFilterStatus} value={filterStatus}>
+                <SelectTrigger className="w-[180px]">
+                  <ListFilter className="w-4 h-4 mr-2" />
+                  <SelectValue placeholder="Filter by Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">All Statuses</SelectItem>
+                  <SelectItem value="ACTIVE">Active</SelectItem>
+                  <SelectItem value="INACTIVE">Inactive</SelectItem>
+                  <SelectItem value="DEACTIVATED">Deactivated</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button onClick={() => router.push('/admin/faculty/add')} className="flex items-center gap-2">
+                <PlusCircle className="w-4 h-4" /> Add New Faculty
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <div className="text-center py-8 text-gray-500">Loading faculty data...</div>
+            ) : error ? (
+              <div className="text-center py-8 text-red-500 font-medium">Error: {error}</div>
+            ) : filteredFaculty.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">No faculty members found.</div>
+            ) : (
+              <div className="overflow-x-auto rounded-lg border">
+                <Table>
+                  <TableHeader className="bg-gray-50">
+                    <TableRow>
+                      <TableHead className="w-[150px]">Employee ID</TableHead>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Department</TableHead>
+                      <TableHead>Position</TableHead>
+                      <TableHead className="text-center">Status</TableHead>
+                      <TableHead className="text-center w-[180px]">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredFaculty.map(facultyMember => (
+                      <TableRow key={facultyMember.id}>
+                        <TableCell className="font-semibold text-gray-700">{facultyMember.employeeId}</TableCell>
+                        <TableCell className="font-medium text-gray-800">{facultyMember.name}</TableCell>
+                        <TableCell className="text-gray-700">{facultyMember.email}</TableCell>
+                        <TableCell className="text-gray-700">{facultyMember.department.name}</TableCell>
+                        <TableCell className="text-gray-700">{facultyMember.position}</TableCell>
+                        <TableCell className="text-center">
+                          <Badge variant={getStatusBadgeVariant(facultyMember.status)}>{facultyMember.status}</Badge>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" className="h-8 w-8 p-0">
+                                <span className="sr-only">Open menu</span>
+                                <Layers className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => router.push(`/admin/faculty/edit/${facultyMember.id}`)}>
+                                <Edit2 className="h-4 w-4 mr-2" /> Edit Details
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => {
+                                setSelectedFaculty(facultyMember);
+                                setShowDetailsModal(true);
+                              }}>
+                                <Info className="h-4 w-4 mr-2" /> View Details
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => {
+                                setSelectedFaculty(facultyMember);
+                                setShowAssignModal(true);
+                              }}>
+                                <BookOpen className="h-4 w-4 mr-2" /> Assign Course
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => {
+                                setSelectedFaculty(facultyMember);
+                                setShowNotificationModal(true);
+                              }}>
+                                <Bell className="h-4 w-4 mr-2" /> Send Notification
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => {
+                                setSelectedFaculty(facultyMember);
+                                fetchAssignedSubjects(facultyMember.id, facultyMember.assignedCourses || []);
+                                setShowSubjectsModal(true);
+                              }}>
+                                <BookOpen className="h-4 w-4 mr-2" /> Manage Subjects
+                              </DropdownMenuItem>
+                              {facultyMember.status === 'ACTIVE' ? (
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="text-orange-600 focus:text-orange-700 focus:bg-orange-50 cursor-pointer">
+                                      <UserX className="h-4 w-4 mr-2" /> Deactivate
+                                    </DropdownMenuItem>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>Confirm Deactivation</AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        Are you sure you want to deactivate {facultyMember.name}? They will not be able to log in.
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                      <AlertDialogAction onClick={() => handleStatusChange(facultyMember.id, 'DEACTIVATED')}>Deactivate</AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              ) : (
+                                <DropdownMenuItem onClick={() => handleStatusChange(facultyMember.id, 'ACTIVE')} className="text-green-600 focus:text-green-700 focus:bg-green-50 cursor-pointer">
+                                  <UserCheck className="h-4 w-4 mr-2" /> Activate
+                                </DropdownMenuItem>
+                              )}
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="text-red-600 focus:text-red-700 focus:bg-red-50 cursor-pointer">
+                                    <Trash2 className="h-4 w-4 mr-2" /> Remove
+                                  </DropdownMenuItem>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      This action cannot be undone. This will permanently remove {facultyMember.name} from the system.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => handleRemove(facultyMember.id)}>Remove</AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </div>
-              <div>
-                <span className="font-semibold">Status:</span>
-                <span className={`ml-2 px-2 py-0.5 rounded text-xs ${selectedFaculty.status === 'ACTIVE' ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-700'}`}>
-                  {selectedFaculty.status}
-                </span>
-              </div>
-              <div>
-                <span className="font-semibold">Assigned Courses:</span>
-                {selectedFaculty.assignedCourses && selectedFaculty.assignedCourses.length > 0 ? (
-                  <ul className="ml-2 flex flex-wrap gap-2 mt-1">
-                    {selectedFaculty.assignedCourses.map((c) => (
-                      <li key={c.course.id} className="bg-blue-50 px-2 py-0.5 rounded text-blue-700 text-xs">
-                        {c.course.name} <span className="text-gray-500">({c.course.code})</span>
-                      </li>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Faculty Details Modal */}
+        <Dialog open={showDetailsModal} onOpenChange={setShowDetailsModal}>
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle>Faculty Details</DialogTitle>
+              <DialogDescription>Information about {selectedFaculty?.name}</DialogDescription>
+            </DialogHeader>
+            {selectedFaculty && (
+              <div className="grid gap-4 py-4">
+                <div className="grid grid-cols-2 items-center gap-4">
+                  <span className="font-medium">Name:</span>
+                  <span>{selectedFaculty.name}</span>
+
+                  <span className="font-medium">Email:</span>
+                  <span>{selectedFaculty.email}</span>
+
+                  <span className="font-medium">Employee ID:</span>
+                  <span>{selectedFaculty.employeeId}</span>
+
+                  <span className="font-medium">Department:</span>
+                  <span>{selectedFaculty.department.name}</span>
+
+                  <span className="font-medium">Position:</span>
+                  <span>{selectedFaculty.position}</span>
+
+                  <span className="font-medium">Status:</span>
+                  <span>
+                    <Badge variant={getStatusBadgeVariant(selectedFaculty.status)}>{selectedFaculty.status}</Badge>
+                  </span>
+                </div>
+
+                <h3 className="text-lg font-semibold mt-4">Assigned Courses</h3>
+                {(selectedFaculty.assignedCourses && selectedFaculty.assignedCourses.length > 0) ? (
+                  <ul className="list-disc ml-6 space-y-1">
+                    {selectedFaculty.assignedCourses.map(ac => (
+                      <li key={ac.course.id}>{ac.course.name} ({ac.course.code})</li>
                     ))}
                   </ul>
                 ) : (
-                  <span className="ml-2 text-gray-500">No courses assigned</span>
+                  <p className="text-gray-500">No courses assigned.</p>
                 )}
               </div>
-            </div>
-            <div className="flex flex-wrap gap-2 mt-6">
-              <Button onClick={() => {
-                setShowDetailsModal(false);
-                router.push(`/admin/faculty/edit/${selectedFaculty.id}`);
-              }} variant="outline"><Edit2 className="w-4 h-4 mr-1" /> Edit</Button>
-              <Button onClick={() => setShowAssignModal(true)} variant="outline"><Layers className="w-4 h-4 mr-1" /> Assign to Course</Button>
-              <Button onClick={() => setShowNotificationModal(true)} variant="outline"><Bell className="w-4 h-4 mr-1" /> Notify</Button>
-              <Button onClick={() => handleStatusChange(selectedFaculty.id, selectedFaculty.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE')} variant="destructive"><Ban className="w-4 h-4 mr-1" /> {selectedFaculty.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}</Button>
-            </div>
-          </div>
-        </div>
-      )}
+            )}
+            <DialogFooter>
+              <Button onClick={() => setShowDetailsModal(false)}>Close</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
-      {/* Course Assignment Modal */}
-      {showAssignModal && selectedFaculty && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold">Assign Course</h2>
-              <button 
-                onClick={() => setShowAssignModal(false)}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                ×
-              </button>
-            </div>
-
-            <div className="space-y-4">
+        {/* Assign Course Modal */}
+        <Dialog open={showAssignModal} onOpenChange={setShowAssignModal}>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>Assign Course to {selectedFaculty?.name}</DialogTitle>
+              <DialogDescription>Select a course and semester to assign.</DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Select Course
-                </label>
-                <select
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                  value={selectedCourse}
-                  onChange={(e) => setSelectedCourse(e.target.value)}
-                  disabled={assignLoading}
-                >
-                  <option value="">Select a course...</option>
-                  {courses.map((course) => (
-                    <option key={course.id} value={course.id}>
-                      {course.name} ({course.code})
-                    </option>
-                  ))}
-                </select>
+                <label htmlFor="assign-course-select" className="block text-sm font-medium text-gray-700 mb-1">Course</label>
+                <Select onValueChange={setSelectedCourse} value={selectedCourse}>
+                  <SelectTrigger id="assign-course-select">
+                    <SelectValue placeholder="Select Course" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {courses.map(course => (
+                      <SelectItem key={course.id} value={String(course.id)}>{course.name} ({course.code}) - {String(course.departmentId)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Semester
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  max="8"
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                  value={selectedSemester}
-                  onChange={e => setSelectedSemester(e.target.value)}
-                  disabled={assignLoading}
-                  placeholder="Enter semester (e.g. 1, 2, 3...)"
-                />
-              </div>
-              <div className="flex justify-end gap-2">
-                <Button 
-                  variant="outline" 
-                  onClick={() => setShowAssignModal(false)}
-                  disabled={assignLoading}
-                >
-                  Cancel
-                </Button>
-                <Button 
-                  onClick={handleAssignCourse}
-                  disabled={assignLoading}
-                >
-                  {assignLoading ? 'Assigning...' : 'Assign Course'}
-                </Button>
+                <label htmlFor="assign-semester-select" className="block text-sm font-medium text-gray-700 mb-1">Semester</label>
+                <Select onValueChange={setSelectedSemester} value={selectedSemester}>
+                  <SelectTrigger id="assign-semester-select">
+                    <SelectValue placeholder="Select Semester" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[1, 2, 3, 4, 5, 6, 7, 8].map(sem => (
+                      <SelectItem key={sem} value={String(sem)}>{sem}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
-          </div>
-        </div>
-      )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowAssignModal(false)}>Cancel</Button>
+              <Button onClick={handleAssignCourse} disabled={assignLoading}>
+                {assignLoading ? 'Assigning...' : 'Assign Course'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
-      {/* Notification Modal */}
-      {showNotificationModal && selectedFaculty && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold">Send Notification</h2>
-              <button 
-                onClick={() => setShowNotificationModal(false)}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                ×
-              </button>
-            </div>
-
-            <div className="space-y-4">
+        {/* Send Notification Modal */}
+        <Dialog open={showNotificationModal} onOpenChange={setShowNotificationModal}>
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle>Send Notification to {selectedFaculty?.name}</DialogTitle>
+              <DialogDescription>Compose a message to send to this faculty member.</DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Title
-                </label>
+                <label htmlFor="notification-title" className="block text-sm font-medium text-gray-700 mb-1">Title</label>
                 <Input
-                  type="text"
+                  id="notification-title"
+                  placeholder="Notification Title"
                   value={notificationTitle}
-                  onChange={(e) => setNotificationTitle(e.target.value)}
-                  placeholder="Enter notification title"
+                  onChange={e => setNotificationTitle(e.target.value)}
                 />
               </div>
-
               <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Message
-                </label>
-                <textarea
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                  rows={4}
+                <label htmlFor="notification-message" className="block text-sm font-medium text-gray-700 mb-1">Message</label>
+                <Input
+                  id="notification-message"
+                  placeholder="Notification Message"
                   value={notificationMessage}
-                  onChange={(e) => setNotificationMessage(e.target.value)}
-                  placeholder="Enter notification message"
+                  onChange={e => setNotificationMessage(e.target.value)}
                 />
-              </div>
-
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setShowNotificationModal(false)}>
-                  Cancel
-                </Button>
-                <Button onClick={handleSendNotification}>
-                  Send Notification
-                </Button>
               </div>
             </div>
-          </div>
-        </div>
-      )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowNotificationModal(false)}>Cancel</Button>
+              <Button onClick={handleSendNotification}>
+                Send Notification
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Manage Subjects Modal */}
+        <Dialog open={showSubjectsModal} onOpenChange={setShowSubjectsModal}>
+          <DialogContent className="sm:max-w-[600px]">
+            <DialogHeader>
+              <DialogTitle>Manage Subjects for {selectedFaculty?.name}</DialogTitle>
+              <DialogDescription>Select subjects to assign to this faculty member.</DialogDescription>
+            </DialogHeader>
+            <div className="py-4">
+              {subjectsLoading ? (
+                <div className="text-center py-4">Loading subjects...</div>
+              ) : subjectsError ? (
+                <div className="text-red-500 text-center py-4">Error: {subjectsError}</div>
+              ) : availableSubjects.length === 0 ? (
+                <div className="text-gray-500 text-center py-4">No subjects available.</div>
+              ) : (
+                <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2">
+                  {availableSubjects.map(subject => (
+                    <div key={subject.id} className="flex items-center justify-between p-2 border rounded-md">
+                      <label htmlFor={`subject-${subject.id}`} className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          id={`subject-${subject.id}`}
+                          checked={selectedSubjects.includes(subject.id)}
+                          onChange={(e) => handleSubjectSelection(subject.id, e.target.checked)}
+                          className="form-checkbox h-5 w-5 text-blue-600 rounded"
+                        />
+                        <div>
+                          <p className="font-medium">{subject.name} ({subject.code})</p>
+                          <p className="text-sm text-gray-500">Course: {subject.course?.name || 'N/A'} • Semester: {subject.semester}</p>
+                        </div>
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowSubjectsModal(false)}>Cancel</Button>
+              <Button onClick={handleSaveSubjects} disabled={subjectsLoading}>Save Subjects</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+      </div>
     </div>
-  )
+  );
 } 

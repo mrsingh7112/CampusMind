@@ -1,208 +1,155 @@
 'use client'
+import { useEffect, useState } from 'react'
+import { getSession } from 'next-auth/react'
+import { format, parseISO } from 'date-fns'
+import { CalendarDays, BarChart2, ListChecks } from 'lucide-react'
 
-import { useState, useEffect } from 'react'
-import { useSession } from 'next-auth/react'
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend,
-  PointElement,
-  LineElement,
-  ArcElement,
-} from 'chart.js'
-import { Bar, Line, Doughnut } from 'react-chartjs-2'
-
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  PointElement,
-  LineElement,
-  ArcElement,
-  Title,
-  Tooltip,
-  Legend
-)
-
-interface AttendanceData {
-  subject: string
-  present: number
-  total: number
-  dates: string[]
-  status: boolean[]
+interface AttendanceStats {
+  totalClasses: number;
+  attendedClasses: number;
+  percentage: number;
+  month: string;
 }
 
-export default function StudentAttendancePage() {
-  const { data: session } = useSession()
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth())
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
-  const [attendanceData, setAttendanceData] = useState<AttendanceData[]>([])
-  const [predictedAttendance, setPredictedAttendance] = useState<number | null>(null)
+interface AttendanceRecord {
+  id: string;
+  date: string;
+  status: string;
+  subject: {
+    name: string;
+    code: string;
+  };
+}
+
+export default function AttendancePage() {
+  const [attendanceStats, setAttendanceStats] = useState<AttendanceStats | null>(null);
+  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedMonth, setSelectedMonth] = useState<string>(format(new Date(), 'yyyy-MM'));
 
   useEffect(() => {
-    fetchAttendanceData()
-  }, [selectedMonth, selectedYear])
+    async function fetchAttendance() {
+      setLoading(true);
+      setError(null);
+      const session = await getSession();
+      const studentId = session?.user?.id;
 
-  const fetchAttendanceData = async () => {
-    try {
-      const response = await fetch('/api/student/attendance?' + new URLSearchParams({
-        month: selectedMonth.toString(),
-        year: selectedYear.toString()
-      }))
-      const data = await response.json()
-      setAttendanceData(data.attendance)
-      setPredictedAttendance(data.prediction)
-    } catch (error) {
-      console.error('Error fetching attendance:', error)
+      if (!studentId) {
+        setError('Student ID not found. Please log in again.');
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const [year, month] = selectedMonth.split('-');
+        const res = await fetch(`/api/student/attendance?month=${month}&year=${year}`);
+        
+        if (!res.ok) {
+          const errorData = await res.json();
+          throw new Error(errorData.message || 'Failed to fetch attendance data');
+        }
+
+        const data = await res.json();
+        setAttendanceStats(data.stats);
+        setAttendanceRecords(data.records);
+      } catch (err: any) {
+        console.error('Error fetching attendance:', err);
+        setError(err.message || 'An unexpected error occurred.');
+      } finally {
+        setLoading(false);
+      }
     }
-  }
 
-  const monthlyBarChartData = {
-    labels: attendanceData.map(data => data.subject),
-    datasets: [
-      {
-        label: 'Attendance Percentage',
-        data: attendanceData.map(data => (data.present / data.total) * 100),
-        backgroundColor: 'rgba(75, 192, 192, 0.5)',
-        borderColor: 'rgba(75, 192, 192, 1)',
-        borderWidth: 1,
-      },
-    ],
-  }
+    fetchAttendance();
+  }, [selectedMonth]);
 
-  const attendanceTrendData = {
-    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
-    datasets: [
-      {
-        label: 'Overall Attendance Trend',
-        data: [85, 88, 82, 90, 85, predictedAttendance || 0],
-        borderColor: 'rgb(255, 99, 132)',
-        tension: 0.1,
-      },
-    ],
-  }
-
-  const overallAttendanceData = {
-    labels: ['Present', 'Absent'],
-    datasets: [
-      {
-        data: [75, 25],
-        backgroundColor: [
-          'rgba(75, 192, 192, 0.5)',
-          'rgba(255, 99, 132, 0.5)',
-        ],
-        borderColor: [
-          'rgba(75, 192, 192, 1)',
-          'rgba(255, 99, 132, 1)',
-        ],
-        borderWidth: 1,
-      },
-    ],
-  }
+  const handleMonthChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setSelectedMonth(event.target.value);
+  };
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">Attendance Dashboard</h1>
-        <div className="flex space-x-4">
-          <select
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
-            className="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-          >
-            {Array.from({ length: 12 }, (_, i) => (
-              <option key={i} value={i}>
-                {new Date(2000, i).toLocaleString('default', { month: 'long' })}
-              </option>
-            ))}
-          </select>
-          <select
-            value={selectedYear}
-            onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-            className="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-          >
-            {[2023, 2024].map(year => (
-              <option key={year} value={year}>{year}</option>
-            ))}
-          </select>
-        </div>
+    <div className="space-y-8 p-6 bg-gray-50 min-h-screen">
+      <h1 className="text-4xl font-extrabold text-gray-900 mb-6">Attendance Overview</h1>
+
+      <div className="mb-6 flex items-center gap-4">
+        <label htmlFor="month-select" className="text-lg font-medium text-gray-700">Select Month:</label>
+        <input
+          type="month"
+          id="month-select"
+          value={selectedMonth}
+          onChange={handleMonthChange}
+          className="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+        />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Monthly Attendance Bar Chart */}
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h2 className="text-lg font-semibold mb-4">Monthly Subject-wise Attendance</h2>
-          <Bar data={monthlyBarChartData} />
-        </div>
-
-        {/* Attendance Trend Line Chart */}
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h2 className="text-lg font-semibold mb-4">Attendance Trend</h2>
-          <Line data={attendanceTrendData} />
-          {predictedAttendance && (
-            <div className="mt-4 p-4 bg-blue-50 rounded-md">
-              <p className="text-sm text-blue-700">
-                AI Prediction: Your attendance next month is predicted to be {predictedAttendance.toFixed(1)}%
-              </p>
+      {loading ? (
+        <div className="text-center text-gray-600 text-lg py-10">Loading attendance data...</div>
+      ) : error ? (
+        <div className="text-center text-red-600 text-lg py-10 font-medium">Error: {error}</div>
+      ) : (
+        <>
+          {/* Attendance Stats */}
+          <div className="bg-white rounded-xl shadow-lg p-6 border border-blue-100 transform transition-all duration-300 hover:scale-[1.02] hover:shadow-xl">
+            <h2 className="text-xl font-bold text-blue-700 mb-4 flex items-center gap-2">
+              <BarChart2 className="w-6 h-6" /> Attendance Statistics ({format(parseISO(selectedMonth + '-01'), 'MMMM yyyy')})
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
+              <div>
+                <p className="text-5xl font-extrabold text-blue-900">{attendanceStats?.percentage || 0}%</p>
+                <p className="text-lg text-gray-600">Present</p>
+              </div>
+              <div>
+                <p className="text-5xl font-extrabold text-blue-900">{attendanceStats?.attendedClasses || 0}</p>
+                <p className="text-lg text-gray-600">Classes Attended</p>
+              </div>
+              <div>
+                <p className="text-5xl font-extrabold text-blue-900">{attendanceStats?.totalClasses || 0}</p>
+                <p className="text-lg text-gray-600">Total Classes</p>
+              </div>
             </div>
-          )}
-        </div>
-
-        {/* Overall Attendance Doughnut Chart */}
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h2 className="text-lg font-semibold mb-4">Overall Attendance</h2>
-          <div className="w-1/2 mx-auto">
-            <Doughnut data={overallAttendanceData} />
           </div>
-        </div>
 
-        {/* Detailed Attendance Table */}
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h2 className="text-lg font-semibold mb-4">Detailed Attendance</h2>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Subject
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Present
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Total
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Percentage
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {attendanceData.map((data, index) => (
-                  <tr key={index}>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {data.subject}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {data.present}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {data.total}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {((data.present / data.total) * 100).toFixed(1)}%
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          {/* Attendance Records */}
+          <div className="bg-white rounded-xl shadow-lg p-6 border border-purple-100 transform transition-all duration-300 hover:scale-[1.02] hover:shadow-xl">
+            <h2 className="text-xl font-bold text-purple-700 mb-4 flex items-center gap-2">
+              <ListChecks className="w-6 h-6" /> Attendance Records
+            </h2>
+            <div className="overflow-x-auto">
+              {attendanceRecords.length > 0 ? (
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Subject</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {attendanceRecords.map((record) => (
+                      <tr key={record.id}>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                          {format(parseISO(record.date), 'MMM d, yyyy')}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                          {record.subject.code} - {record.subject.name}
+                        </td>
+                        <td className={`px-6 py-4 whitespace-nowrap text-sm font-semibold ${
+                          record.status === 'PRESENT' ? 'text-green-600' : 'text-red-600'
+                        }`}>
+                          {record.status}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <div className="text-center text-gray-500 py-4">No attendance records for this month.</div>
+              )}
+            </div>
           </div>
-        </div>
-      </div>
+        </>
+      )}
     </div>
-  )
+  );
 } 

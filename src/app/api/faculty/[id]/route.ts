@@ -9,7 +9,7 @@ export async function GET(
     const facultyId = params.id
 
     // Get faculty details
-    const faculty = await prisma.facultyMember.findUnique({
+    const faculty = await prisma.Faculty.findUnique({
       where: { id: facultyId },
     })
 

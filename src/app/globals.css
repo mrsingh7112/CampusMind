@@ -4,65 +4,50 @@
 
 @layer base {
   :root {
+    /* Light mode variables */
     --background: 0 0% 100%;
     --foreground: 222.2 84% 4.9%;
-
     --card: 0 0% 100%;
     --card-foreground: 222.2 84% 4.9%;
- 
     --popover: 0 0% 100%;
     --popover-foreground: 222.2 84% 4.9%;
- 
     --primary: 222.2 47.4% 11.2%;
     --primary-foreground: 210 40% 98%;
- 
     --secondary: 210 40% 96.1%;
     --secondary-foreground: 222.2 47.4% 11.2%;
- 
     --muted: 210 40% 96.1%;
     --muted-foreground: 215.4 16.3% 46.9%;
- 
     --accent: 210 40% 96.1%;
     --accent-foreground: 222.2 47.4% 11.2%;
- 
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
-
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
     --ring: 222.2 84% 4.9%;
- 
     --radius: 0.5rem;
   }
  
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
- 
-    --card: 222.2 84% 4.9%;
+    /* Enhanced dark mode variables */
+    --background: 222 47% 7%; /* deep blue-gray */
+    --foreground: 210 40% 98%; /* almost white */
+    --card: 222 47% 10%;
     --card-foreground: 210 40% 98%;
- 
-    --popover: 222.2 84% 4.9%;
+    --popover: 222 47% 12%;
     --popover-foreground: 210 40% 98%;
- 
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
- 
-    --secondary: 217.2 32.6% 17.5%;
+    --primary: 220 100% 60%; /* vibrant blue */
+    --primary-foreground: 0 0% 100%; /* white */
+    --secondary: 217 32% 18%;
     --secondary-foreground: 210 40% 98%;
- 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
- 
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
- 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
- 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
+    --muted: 217 32% 18%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 291 64% 42%; /* vibrant purple */
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 222 47% 20%;
+    --input: 222 47% 20%;
+    --ring: 220 100% 60%;
   }
 }
  
@@ -71,7 +56,7 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply text-foreground;
   }
 }
 
@@ -102,4 +87,30 @@
 
 .calendar-day.disabled {
   @apply text-gray-300 cursor-not-allowed hover:bg-transparent;
+}
+
+.theme-purple {
+  --primary: 270 91% 60%;
+  --accent: 270 91% 70%;
+}
+.theme-green {
+  --primary: 142 71% 45%;
+  --accent: 142 71% 55%;
+}
+.theme-orange {
+  --primary: 24 94% 50%;
+  --accent: 24 94% 60%;
+}
+.theme-pink {
+  --primary: 330 81% 60%;
+  --accent: 330 81% 70%;
+}
+.contrast-high {
+  --background: 0 0% 100%;
+  --foreground: 0 0% 0%;
+  --primary: 0 0% 0%;
+  --accent: 48 100% 50%;
+}
+.dyslexia-font {
+  font-family: 'OpenDyslexic', Arial, sans-serif !important;
 } 

@@ -1,67 +1,51 @@
-import { NextResponse } from 'next/server'
-import type { NextRequest } from 'next/server'
-import { jwtVerify } from 'jose'
+import { withAuth } from "next-auth/middleware"
+import { NextResponse } from "next/server"
 
-// Define protected routes and their allowed roles
-const protectedRoutes = {
-  '/faculty/dashboard': ['FACULTY'],
-  '/student/dashboard': ['STUDENT'],
-  '/admin/dashboard': ['ADMIN'],
-}
+export default withAuth(
+  // `withAuth` augments the Next.js `Request` object with a `token` field
+  function middleware(req) {
+    // console.log("Token: ", req.nextUrl.pathname, req.nextauth.token)
 
-export async function middleware(request: NextRequest) {
-  const token = request.cookies.get('auth_token')?.value
-
-  // If no token and trying to access protected route, redirect to login
-  if (!token && isProtectedRoute(request.nextUrl.pathname)) {
-    return NextResponse.redirect(new URL('/auth/login', request.url))
-  }
-
-  try {
-    if (token) {
-      // Verify and decode the JWT token
-      const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'your-secret-key')
-      const { payload } = await jwtVerify(token, secret)
-      const userRole = payload.role as string
-
-      // Check if user is trying to access a protected route
-      if (isProtectedRoute(request.nextUrl.pathname)) {
-        const allowedRoles = protectedRoutes[request.nextUrl.pathname as keyof typeof protectedRoutes]
-        
-        // If user's role is not allowed for this route
-        if (!allowedRoles.includes(userRole)) {
-          // Redirect based on role
-          if (userRole === 'FACULTY') {
-            return NextResponse.redirect(new URL('/faculty/dashboard', request.url))
-          }
-          if (userRole === 'STUDENT') {
-            return NextResponse.redirect(new URL('/student/dashboard', request.url))
-          }
-          if (userRole === 'ADMIN') {
-            return NextResponse.redirect(new URL('/admin/dashboard', request.url))
-          }
-        }
-      }
+    // Redirect if not authorized
+    if (req.nextUrl.pathname.startsWith("/admin") && req.nextauth.token?.role !== "admin") {
+      return NextResponse.rewrite(new URL("/auth/login?message=You are not authorized to view this page.", req.url))
     }
-  } catch (error) {
-    // If token is invalid, clear it and redirect to login
-    const response = NextResponse.redirect(new URL('/auth/login', request.url))
-    response.cookies.delete('auth_token')
-    return response
+    if (req.nextUrl.pathname.startsWith("/faculty") && req.nextauth.token?.role !== "faculty") {
+      return NextResponse.rewrite(new URL("/auth/login?message=You are not authorized to view this page.", req.url))
+    }
+    if (req.nextUrl.pathname.startsWith("/student") && req.nextauth.token?.role !== "student") {
+      return NextResponse.rewrite(new URL("/auth/login?message=You are not authorized to view this page.", req.url))
+    }
+  },
+  {
+    callbacks: {
+      authorized: ({ token, req }) => {
+        // Allow access to login, and API routes that do not require authentication
+        if (req.nextUrl.pathname.startsWith("/api/auth") || req.nextUrl.pathname.startsWith("/auth/login") || req.nextUrl.pathname.startsWith("/api/announcements")) {
+          return true
+        }
+        // Allow authenticated users to access their respective dashboards
+        if (token) {
+          if (req.nextUrl.pathname.startsWith("/admin") && token.role === "admin") return true;
+          if (req.nextUrl.pathname.startsWith("/faculty") && token.role === "faculty") return true;
+          if (req.nextUrl.pathname.startsWith("/student") && token.role === "student") return true;
+          // If it's a profile page, let the specific page handle it based on session
+          if (req.nextUrl.pathname.includes("/profile")) return true;
+          // For all other cases, if token exists, allow access for now
+          return true;
+        }
+        // If no token, redirect to login
+        return false
+      },
+    },
   }
-
-  return NextResponse.next()
-}
-
-function isProtectedRoute(pathname: string): boolean {
-  if (!pathname) return false
-  return Object.keys(protectedRoutes).some(route => pathname.startsWith(route))
-}
+)
 
 export const config = {
   matcher: [
-    '/faculty/dashboard/:path*',
-    '/student/dashboard/:path*',
-    '/admin/dashboard/:path*',
+    '/admin/:path*',
+    '/faculty/:path*',
+    '/student/:path*',
+    '/api/announcements/:path*'
   ],
 } 

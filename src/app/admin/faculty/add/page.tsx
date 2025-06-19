@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { UserPlus, Building2, Layers } from 'lucide-react'
 import { toast } from 'sonner'
+import bcrypt from 'bcryptjs'
 
 const fetcher = (url: string) => fetch(url).then(res => res.json())
 
@@ -54,6 +55,9 @@ export default function AddFacultyPage() {
     }
 
     try {
+      const passwordToStore = form.password || Math.random().toString(36).slice(-8)
+      const hashedPassword = await bcrypt.hash(passwordToStore, 10)
+
       const res = await fetch('/api/admin/faculty', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -63,7 +67,7 @@ export default function AddFacultyPage() {
           department: form.department,
           position: form.position,
           employeeId,
-          password: form.password || Math.random().toString(36).slice(-8),
+          password: hashedPassword,
           phoneNumber: form.phoneNumber || null
         })
       })
@@ -72,7 +76,7 @@ export default function AddFacultyPage() {
         toast.error(data.error || data.details || 'Failed to add faculty')
         return
       }
-      setShowCreds({ employeeId, password: form.password || Math.random().toString(36).slice(-8) })
+      setShowCreds({ employeeId, password: passwordToStore })
       toast.success('Faculty added successfully!')
       setForm({ name: '', email: '', department: '', position: '', employeeId: '', password: '', phoneNumber: '' })
       mutate('/api/admin/faculty')

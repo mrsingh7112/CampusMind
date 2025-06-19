@@ -1,9 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import AdminHeader from '@/components/admin/AdminHeader'
 import AdminSidebar from '@/components/admin/AdminSidebar'
 import Link from 'next/link'
+import { useSession } from 'next-auth/react'
+import { useRouter } from 'next/navigation'
 
 export default function AdminLayout({
   children,
@@ -11,6 +13,17 @@ export default function AdminLayout({
   children: React.ReactNode
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const { data: session, status } = useSession();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (status === 'unauthenticated' || (session && session.user.role !== 'ADMIN')) {
+      router.replace('/');
+    }
+  }, [status, session, router]);
+
+  if (status === 'loading') return null;
+  if (!session || session.user.role !== 'ADMIN') return null;
 
   return (
     <div className="min-h-screen bg-gray-100">

@@ -1,62 +1,49 @@
 import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import prisma from '@/lib/prisma'
+import { prisma } from '@/lib/prisma'
 
-export async function GET() {
-  try {
-    const session = await getServerSession(authOptions)
+console.log('[Faculty Classes API] Route called');
 
-    if (!session) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
-    }
-
-    if (session.user.role !== 'FACULTY') {
-      return NextResponse.json(
-        { error: 'Forbidden' },
-        { status: 403 }
-      )
-    }
-
-    // Get all classes taught by the faculty member
-    const classes = await prisma.class.findMany({
-      where: {
-        facultyId: session.user.id
-      },
-      select: {
-        id: true,
-        name: true,
-        code: true,
-        semester: true,
-        _count: {
-          select: {
-            enrollments: true
-          }
-        }
-      },
-      orderBy: {
-        createdAt: 'desc'
-      }
-    })
-
-    // Transform the data to include the student count
-    const formattedClasses = classes.map(cls => ({
-      id: cls.id,
-      name: cls.name,
-      code: cls.code,
-      semester: cls.semester,
-      studentCount: cls._count.enrollments
-    }))
-
-    return NextResponse.json(formattedClasses)
-  } catch (error) {
-    console.error('Error fetching classes:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+export async function GET(request: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session || session.user.role !== 'FACULTY') {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  // Get all subjects assigned to this faculty
+  const facultySubjects = await prisma.facultySubject.findMany({
+    where: { facultyId: session.user.id },
+    include: {
+      subject: {
+        include: {
+          course: true
+        }
+      }
+    }
+  });
+
+  // Map to the format expected by the dashboard
+  const classes = await Promise.all(
+    facultySubjects.map(async (fs) => {
+      // Count students for this subject's course and semester
+      const studentCount = await prisma.student.count({
+        where: {
+          courseId: fs.subject.courseId,
+          currentSemester: fs.subject.semester
+        }
+      });
+      return {
+        id: fs.subject.id,
+        name: fs.subject.name,
+        code: fs.subject.code,
+        semester: fs.subject.semester,
+        course: fs.subject.course.name,
+        studentCount,
+        // Optionally, you can add timetable info if you want to show it
+      };
+    })
+  );
+
+  return NextResponse.json(classes);
 } 

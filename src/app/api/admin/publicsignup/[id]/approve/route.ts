@@ -12,28 +12,33 @@ export async function POST(
       return NextResponse.json({ error: 'Signup request not found' }, { status: 404 });
     }
 
+    // 1.5. Find department by name
+    const department = await prisma.department.findUnique({ where: { name: signup.department } });
+    if (!department) {
+      return NextResponse.json({ error: 'Department not found' }, { status: 400 });
+    }
+
     // 2. Create the appropriate record based on role
     if (signup.role === 'FACULTY') {
-      await prisma.facultyMember.create({
+      await prisma.faculty.create({
         data: {
           name: signup.name,
           email: signup.email,
-          department: signup.department,
+          departmentId: department.id,
           position: signup.position || '',
-          tokenId: signup.tokenId,
+          employeeId: signup.tokenId,
           password: signup.password,
           status: 'ACTIVE'
         },
       });
     } else if (signup.role === 'STUDENT') {
-      await prisma.studentMember.create({
+      await prisma.student.create({
         data: {
           name: signup.name,
           email: signup.email,
-          department: signup.department,
           courseId: signup.courseId!,
-          semester: signup.semester!,
-          tokenId: signup.tokenId,
+          currentSemester: signup.semester!,
+          rollNumber: signup.tokenId,
           password: signup.password,
           status: 'ACTIVE'
         },

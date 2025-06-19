@@ -111,6 +111,25 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: 'Student not found' }, { status: 404 });
     }
 
+    // Check for permanent deactivation
+    if (status === 'INACTIVE' && deactivatedTo === '9999-12-31') {
+      // Delete related attendance
+      await prisma.studentAttendance.deleteMany({ where: { studentId: id } });
+      // Delete the student
+      await prisma.student.delete({ where: { id } });
+      // Log activity
+      await prisma.activityLog.create({
+        data: {
+          userId: 'admin',
+          userType: 'ADMIN',
+          action: 'PERMANENT_DEACTIVATION',
+          entity: 'STUDENT',
+          details: `Student permanently deactivated and removed: ${student.name}`,
+        },
+      });
+      return NextResponse.json({ success: true, permanentlyDeactivated: true });
+    }
+
     // Check for rustication (3 deactivations)
     if (status === 'INACTIVE' && ((student.deactivationCount ?? 0) + 1) >= 3) {
       // Delete related attendance

@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 
 export async function GET() {
   try {
@@ -19,12 +21,17 @@ export async function GET() {
                 name: true,
                 semester: true
               }
+            },
+            _count: {
+              select: { students: true }
             }
           }
         },
         _count: {
           select: {
-            courses: true
+            courses: true,
+            faculty: true,
+            // students: true,
           }
         }
       },
@@ -32,7 +39,17 @@ export async function GET() {
         name: 'asc',
       },
     })
-    return NextResponse.json(departments)
+
+    // Calculate total students for each department
+    const departmentsWithStudentCounts = departments.map(dept => ({
+      ...dept,
+      _count: {
+        ...dept._count,
+        students: dept.courses.reduce((sum, course) => sum + (course._count?.students || 0), 0),
+      },
+    }))
+
+    return NextResponse.json(departmentsWithStudentCounts)
   } catch (error) {
     console.error('Error fetching departments:', error)
     return NextResponse.json(
@@ -45,6 +62,11 @@ export async function GET() {
 // PATCH: Rename department, course, or subject
 export async function PATCH(request: Request) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session || session.user.role !== 'ADMIN' || !(session.user as any).isSuperAdmin) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { type, id, name } = await request.json()
     let updated
     if (type === 'department') {
@@ -66,6 +88,11 @@ export async function PATCH(request: Request) {
 // DELETE: Remove department, course, or subject
 export async function DELETE(request: Request) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session || session.user.role !== 'ADMIN' || !(session.user as any).isSuperAdmin) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { type, id } = await request.json()
     if (type === 'department') {
       await prisma.department.delete({ where: { id } })
@@ -83,9 +110,14 @@ export async function DELETE(request: Request) {
   }
 }
 
-// POST: Add course or subject
+// POST: Add department, course or subject
 export async function POST(request: Request) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session || session.user.role !== 'ADMIN' || !(session.user as any).isSuperAdmin) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { type, departmentId, courseId, name, semester, courses } = await request.json()
 
     // Validate the request
@@ -131,56 +163,21 @@ export async function POST(request: Request) {
         } 
       })
 
-      // Create courses and subjects if provided
+      // If courses are provided, create them
       if (Array.isArray(courses)) {
         for (const course of courses) {
-          if (!course.name) {
-            continue // Skip if course name is missing
-          }
-
-          try {
-            const courseCode = `${code}-${Math.floor(Math.random() * 1000)}`
-            const createdCourse = await prisma.course.create({
-              data: {
-                name: course.name,
-                code: courseCode,
-                departmentId: createdDepartment.id,
-                status: 'ACTIVE'
-              },
-            })
-
-            // Add subjects if they exist
-            if (Array.isArray(course.subjects)) {
-              for (const subjGroup of course.subjects) {
-                if (subjGroup.semester && Array.isArray(subjGroup.subjects)) {
-                  for (const subjectName of subjGroup.subjects) {
-                    if (subjectName) {
-                      const subjectCode = `${courseCode}-${subjGroup.semester}-${Math.floor(Math.random() * 100)}`
-                      await prisma.subject.create({
-                        data: {
-                          name: subjectName,
-                          code: subjectCode,
-                          semester: subjGroup.semester,
-                          courseId: createdCourse.id,
-                          status: 'ACTIVE'
-                        },
-                      })
-                    }
-                  }
-                }
-              }
+          await prisma.course.create({
+            data: {
+              name: course.name,
+              code: `${code}-${Math.floor(Math.random() * 1000)}`,
+              departmentId: createdDepartment.id,
+              status: 'ACTIVE'
             }
-          } catch (courseError) {
-            console.error('Error creating course:', courseError)
-            // Continue with other courses even if one fails
-          }
+          })
         }
       }
 
-      return NextResponse.json({ 
-        success: true, 
-        created: createdDepartment 
-      })
+      return NextResponse.json({ success: true, createdDepartment })
     } else if (type === 'course') {
       if (!departmentId || !name) {
         return NextResponse.json({ error: 'Department ID and course name are required' }, { status: 400 })
@@ -194,8 +191,9 @@ export async function POST(request: Request) {
       const created = await prisma.course.create({
         data: {
           name,
-          code: `${department.name.substring(0, 3).toUpperCase()}-${Math.floor(Math.random() * 1000)}`,
+          code: `${department.code}-${Math.floor(Math.random() * 1000)}`,
           departmentId,
+          status: 'ACTIVE'
         },
       })
       return NextResponse.json({ success: true, created })
@@ -203,9 +201,16 @@ export async function POST(request: Request) {
       if (!courseId || !name || !semester) {
         return NextResponse.json({ error: 'Course ID, subject name, and semester are required' }, { status: 400 })
       }
-
+      // Generate a unique code for the subject
+      const subjectCode = `${courseId}-${name.replace(/\s+/g, '').toUpperCase()}-${semester}-${Math.floor(Math.random() * 10000)}`
       const created = await prisma.subject.create({ 
-        data: { name, semester, courseId } 
+        data: { 
+          name, 
+          semester, 
+          courseId, 
+          code: subjectCode,
+          status: 'ACTIVE'
+        } 
       })
       return NextResponse.json({ success: true, created })
     } else {

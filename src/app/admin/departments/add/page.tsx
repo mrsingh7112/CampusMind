@@ -102,31 +102,66 @@ export default function AddDepartmentPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      const payload = {
-        type: "department",
-        name: department,
-        courses: selectedCourses.map(course => ({
-          name: course,
-          subjects: Object.entries(courseSubjects[course] || {}).map(([semester, subjects]) => ({
-            semester: Number(semester),
-            subjects,
-          })),
-        })),
-      }
-      const response = await fetch("/api/admin/departments", {
+      // First create the department
+      const departmentResponse = await fetch("/api/admin/departments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          type: "department",
+          name: department
+        }),
       })
       
-      if (!response.ok) {
-        const error = await response.json()
+      if (!departmentResponse.ok) {
+        const error = await departmentResponse.json()
         throw new Error(error.error || 'Failed to add department')
       }
       
-      const result = await response.json()
+      const { createdDepartment } = await departmentResponse.json()
       
-      toast.success("Department and courses have been added successfully!");
+      // Then create courses and subjects
+      for (const course of selectedCourses) {
+        const courseResponse = await fetch("/api/admin/departments", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: "course",
+            name: course,
+            departmentId: createdDepartment.id
+          }),
+        })
+
+        if (!courseResponse.ok) {
+          const error = await courseResponse.json()
+          throw new Error(error.error || `Failed to add course ${course}`)
+        }
+
+        const { created: createdCourse } = await courseResponse.json()
+
+        // Add subjects for this course
+        const subjects = courseSubjects[course] || {}
+        for (const [semester, subjectList] of Object.entries(subjects)) {
+          for (const subjectName of subjectList) {
+            const subjectResponse = await fetch("/api/admin/departments", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                type: "subject",
+                name: subjectName,
+                courseId: createdCourse.id,
+                semester: parseInt(semester)
+              }),
+            })
+
+            if (!subjectResponse.ok) {
+              const error = await subjectResponse.json()
+              throw new Error(error.error || `Failed to add subject ${subjectName}`)
+            }
+          }
+        }
+      }
+      
+      toast.success("Department and courses have been added successfully!")
       
       // Reset form
       setDepartment("")

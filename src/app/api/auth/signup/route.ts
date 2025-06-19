@@ -20,8 +20,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Course and semester are required for students.' }, { status: 400 });
   }
   // Check if user already exists
-  const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing) {
+  const existingAdmin = await prisma.admin.findUnique({ where: { email } });
+  const existingFaculty = await prisma.faculty.findUnique({ where: { email } });
+  const existingStudent = await prisma.student.findUnique({ where: { email } });
+  const existingSignup = await prisma.publicSignup.findUnique({ where: { email } });
+  if (existingAdmin || existingFaculty || existingStudent || existingSignup) {
     return NextResponse.json({ error: 'Email already registered.' }, { status: 400 });
   }
   // Generate unique token
@@ -29,9 +32,16 @@ export async function POST(req: NextRequest) {
   let tries = 0;
   while (!tokenId && tries < 10) {
     const candidate = generateToken(role);
-    const existsInUser = await prisma.user.findFirst({ where: { tokenId: candidate } });
+    let existsInFaculty = null;
+    let existsInStudent = null;
+    if (role === 'FACULTY') {
+      existsInFaculty = await prisma.faculty.findFirst({ where: { employeeId: candidate } });
+    }
+    if (role === 'STUDENT') {
+      existsInStudent = await prisma.student.findFirst({ where: { rollNumber: candidate } });
+    }
     const existsInSignup = await prisma.publicSignup.findFirst({ where: { tokenId: candidate } });
-    if (!existsInUser && !existsInSignup) tokenId = candidate;
+    if (!existsInFaculty && !existsInStudent && !existsInSignup) tokenId = candidate;
     tries++;
   }
   if (!tokenId) {
